@@ -1,0 +1,70 @@
+{
+  "expo": {
+    "name": "mydanhba",
+    "slug": "mydanhba",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Ứng dụng cần truy cập thư viện ảnh để lưu và tải mã QR.",
+          "savePhotosPermission": "Ứng dụng cần quyền để lưu mã QR vào thư viện ảnh."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Ứng dụng cần quyền camera để quét mã QR."
+        }
+      ],
+      "expo-asset"
+    ],
+    "assetBundlePatterns": [
+      "assets/*"
+    ],
+    "permissions": [
+      "camera",
+      "mediaLibrary"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "e95b2a68-c3d5-4380-a6a7-e9e9b7d0b553"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/e95b2a68-c3d5-4380-a6a7-e9e9b7d0b553"
+    }
+  }
+}
