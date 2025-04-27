@@ -180,6 +180,7 @@ export default function App() {
               component={ContactListScreen}
               options={{
                 headerShown: false,
+                animation: 'scale_from_center',
               }}
             />
             <Stack.Screen

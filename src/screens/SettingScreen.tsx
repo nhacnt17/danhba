@@ -17,6 +17,7 @@ const SettingScreen = ({ navigation }: Props) => {
   const handleLogout = async () => {
     try {
       await signOut(auth);
+      navigation.navigate('Login');
       // Xóa thông tin user và credentials khỏi AsyncStorage
       await AsyncStorage.removeItem(USER_STORAGE_KEY);
       await AsyncStorage.removeItem(CREDENTIALS_STORAGE_KEY);

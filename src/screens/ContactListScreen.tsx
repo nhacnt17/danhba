@@ -54,10 +54,9 @@ export default function ContactListScreen({ navigation }: Props) {
         setGroups(groupList);
         console.log('Groups loaded:', groupList);
       },
-      (error) => {
-        console.error('Error loading groups:', error);
-        Alert.alert('Lỗi', 'Không thể tải danh sách nhóm.');
-      }
+      // (error) => {
+      //   console.error('Error loading groups:', error);
+      // }
     );
 
     // Tải danh sách liên hệ từ Firestore
@@ -88,16 +87,16 @@ export default function ContactListScreen({ navigation }: Props) {
                 }));
               }
             },
-            (error) => {
-              console.log('Realtime Database onValue error:', error);
-            }
+            // (error) => {
+            //   console.log('Realtime Database onValue error:', error);
+            // }
           );
         });
       },
-      (error) => {
-        console.error('Firestore onSnapshot error:', error.code, error.message);
-        Alert.alert('Lỗi', 'Không thể tải danh sách liên hệ. Vui lòng kiểm tra kết nối mạng.');
-      }
+      // (error) => {
+      //   console.error('Firestore onSnapshot error:', error.code, error.message);
+      //   console.log('Lỗi', 'Không thể tải danh sách liên hệ. Vui lòng kiểm tra kết nối mạng.');
+      // }
     );
 
     const avatarRef = ref(realtimeDb, `avatars/${user.uid}`);
@@ -109,10 +108,10 @@ export default function ContactListScreen({ navigation }: Props) {
           setAvatarUrl(`data:image/jpeg;base64,${data.avatarBase64}`);
         }
       },
-      (error) => {
-        console.error('Realtime Database avatar onValue error:', error);
-        Alert.alert('Lỗi', 'Không thể tải ảnh đại diện.');
-      }
+      // (error) => {
+      //   console.error('Realtime Database avatar onValue error:', error);
+      //   console.log('Lỗi', 'Không thể tải ảnh đại diện.');
+      // }
     );
 
     return () => {
@@ -239,7 +238,6 @@ export default function ContactListScreen({ navigation }: Props) {
                 return updatedAvatars;
               });
 
-              Alert.alert('Thành công', 'Liên hệ đã được xóa.');
             } catch (error) {
               console.error('Lỗi khi xóa liên hệ:', error);
               Alert.alert('Lỗi', 'Không thể xóa liên hệ. Vui lòng thử lại.');

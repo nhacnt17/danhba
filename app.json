@@ -55,16 +55,17 @@
       "camera",
       "mediaLibrary"
     ],
-    "extra": {
-      "eas": {
-        "projectId": "e95b2a68-c3d5-4380-a6a7-e9e9b7d0b553"
-      }
-    },
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/e95b2a68-c3d5-4380-a6a7-e9e9b7d0b553"
-    }
+      "url": "https://u.expo.dev/89817b91-80f9-4f8d-8e07-7637f67c53e0"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "89817b91-80f9-4f8d-8e07-7637f67c53e0"
+      }
+    },
+    "owner": "nhac"
   }
 }
