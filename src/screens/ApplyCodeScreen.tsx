@@ -15,9 +15,10 @@ import {
   View,
 } from 'react-native';
 import { Contact, RootStackParamList } from '../../App';
-import { auth, db, realtimeDb } from '../../firebase';
+import { db, realtimeDb } from '../../firebase';
 import { appColors } from '../constants/Colors';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ApplyCode'>;
 
@@ -27,20 +28,38 @@ const ApplyCodeScreen = ({ navigation }: Props) => {
   const [showScanner, setShowScanner] = useState(false);
   const [hasScanned, setHasScanned] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
-  const user = auth.currentUser;
+  const [userName, setUserName] = useState<string | null>(null);
   const isProcessingScan = useRef(false);
 
   useEffect(() => {
+    const initialize = async () => {
+      try {
+        const name = await AsyncStorage.getItem('userName');
+        if (name) {
+          setUserName(name);
+        } else {
+          Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
+          navigation.replace('Login');
+        }
+      } catch (error) {
+        console.error('Error reading userName from AsyncStorage:', error);
+        Alert.alert('Lỗi', 'Không thể tải thông tin người dùng.');
+        navigation.replace('Login');
+      }
+    };
+    initialize();
+
     if (showScanner) {
       setHasScanned(false);
       isProcessingScan.current = false;
     }
-  }, [showScanner]);
+  }, [navigation, showScanner]);
 
   const handleApplyCode = async (code: string) => {
-    if (!user) {
-      Alert.alert('Lỗi', 'Bạn cần đăng nhập để áp dụng mã');
+    if (!userName) {
+      Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
       setIsLoading(false);
+      navigation.replace('Login');
       return;
     }
 
@@ -69,7 +88,7 @@ const ApplyCodeScreen = ({ navigation }: Props) => {
       const includeAvatar = sharedContacts.some(contact => contact.avatarBase64);
       const includeEmail = sharedContacts.some(contact => contact.email);
 
-      const contactsRef = collection(db, 'users', user.uid, 'contacts');
+      const contactsRef = collection(db, 'users', userName, 'contacts');
       const currentSnapshot = await getDocs(contactsRef);
       const currentContacts: Contact[] = currentSnapshot.docs.map(doc => ({
         id: doc.id,
@@ -123,7 +142,7 @@ const ApplyCodeScreen = ({ navigation }: Props) => {
       setShowScanner(false);
       setHasScanned(true);
     } catch (error: any) {
-      console.error('Lỗi khi áp dụng mã: ', error);
+      console.error('Lỗi khi áp dụng mã:', error);
       Alert.alert('Lỗi', 'Không thể áp dụng mã. Vui lòng thử lại.');
     } finally {
       setIsLoading(false);

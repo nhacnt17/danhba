@@ -1,6 +1,5 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
-import { signOut } from 'firebase/auth';
 import { onValue, ref, remove, set } from 'firebase/database';
 import { collection, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
 import { AddCircle, Call, Setting3, Trash } from 'iconsax-react-native';
@@ -20,9 +19,10 @@ import {
 } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { Contact, Group, RootStackParamList } from '../../App';
-import { auth, db, realtimeDb } from '../../firebase';
+import { db, realtimeDb } from '../../firebase';
 import { appColors } from '../constants/Colors';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ContactList'>;
 
@@ -34,92 +34,101 @@ export default function ContactListScreen({ navigation }: Props) {
   const [avatarUrl, setAvatarUrl] = useState<string>('https://i.pinimg.com/736x/bc/43/98/bc439871417621836a0eeea768d60944.jpg');
   const [contactAvatars, setContactAvatars] = useState<{ [key: string]: string }>({});
   const [itemHeight, setItemHeight] = useState<number>(70);
-  const user = auth.currentUser;
+  const [userName, setUserName] = useState<string>('');
   const currentSwipeableRef = useRef<Swipeable | null>(null);
 
   useEffect(() => {
-    if (!user) return;
+    const initialize = async () => {
+      try {
+        const name = await AsyncStorage.getItem('userName');
+        if (name) {
+          setUserName(name);
+          const uid = name;
 
-    console.log('UID người dùng hiện tại:', user.uid);
+          // Tải danh sách nhóm từ Firestore
+          const groupsRef = collection(db, 'users', uid, 'groups');
+          const unsubscribeGroups = onSnapshot(
+            groupsRef,
+            (snapshot) => {
+              const groupList: Group[] = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+              } as Group));
+              setGroups(groupList);
+              console.log('Groups loaded:', groupList);
+            },
+            (error) => {
+              console.error('Error loading groups:', error);
+            }
+          );
 
-    // Tải danh sách nhóm từ Firestore (thời gian thực)
-    const groupsRef = collection(db, 'users', user.uid, 'groups');
-    const unsubscribeGroups = onSnapshot(
-      groupsRef,
-      (snapshot) => {
-        const groupList: Group[] = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-        } as Group));
-        setGroups(groupList);
-        console.log('Groups loaded:', groupList);
-      },
-      // (error) => {
-      //   console.error('Error loading groups:', error);
-      // }
-    );
+          // Tải danh sách liên hệ từ Firestore
+          const contactsRef = collection(db, 'users', uid, 'contacts');
+          const unsubscribeContacts = onSnapshot(
+            contactsRef,
+            (snapshot) => {
+              const contactList: Contact[] = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+              } as Contact));
+              const sortedContacts = contactList.sort((a, b) => a.name.localeCompare(b.name));
+              setContacts(sortedContacts);
+              setFilteredContacts(sortedContacts);
 
-    // Tải danh sách liên hệ từ Firestore
-    const contactsRef = collection(db, 'users', user.uid, 'contacts');
-    const unsubscribeContacts = onSnapshot(
-      contactsRef,
-      (snapshot) => {
-        const contactList: Contact[] = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-        } as Contact));
-        const sortedContacts = contactList.sort((a, b) => a.name.localeCompare(b.name));
-        setContacts(sortedContacts);
-        setFilteredContacts(sortedContacts);
+              contactList.forEach(contact => {
+                console.log(`Contact: ${contact.name}, groupId: ${contact.groupId || 'none'}`);
+                const avatarRef = ref(realtimeDb, `contactAvatars/${contact.id}`);
+                onValue(
+                  avatarRef,
+                  (snapshot) => {
+                    const data = snapshot.val();
+                    if (data && data.avatarBase64) {
+                      setContactAvatars(prev => ({
+                        ...prev,
+                        [contact.id]: `data:image/jpeg;base64,${data.avatarBase64}`,
+                      }));
+                    }
+                  },
+                  // (error) => {
+                  //   console.error('Realtime Database onValue error:', error);
+                  // }
+                );
+              });
+            },
+            (error) => {
+              console.error('Firestore onSnapshot error:', error.code, error.message);
+              Alert.alert('Lỗi', 'Không thể tải danh sách liên hệ. Vui lòng kiểm tra kết nối mạng.');
+            }
+          );
 
-        // Log để kiểm tra groupId
-        contactList.forEach(contact => {
-          console.log(`Contact: ${contact.name}, groupId: ${contact.groupId || 'none'}`);
-          const avatarRef = ref(realtimeDb, `contactAvatars/${contact.id}`);
-          onValue(
+          // Tải ảnh đại diện người dùng
+          const avatarRef = ref(realtimeDb, `avatars/${uid}`);
+          const unsubscribeAvatar = onValue(
             avatarRef,
             (snapshot) => {
               const data = snapshot.val();
               if (data && data.avatarBase64) {
-                setContactAvatars(prev => ({
-                  ...prev,
-                  [contact.id]: `data:image/jpeg;base64,${data.avatarBase64}`,
-                }));
+                setAvatarUrl(`data:image/jpeg;base64,${data.avatarBase64}`);
               }
             },
             // (error) => {
-            //   console.log('Realtime Database onValue error:', error);
+            //   console.error('Realtime Database avatar onValue error:', error);
+            //   Alert.alert('Lỗi', 'Không thể tải ảnh đại diện.');
             // }
           );
-        });
-      },
-      // (error) => {
-      //   console.error('Firestore onSnapshot error:', error.code, error.message);
-      //   console.log('Lỗi', 'Không thể tải danh sách liên hệ. Vui lòng kiểm tra kết nối mạng.');
-      // }
-    );
 
-    const avatarRef = ref(realtimeDb, `avatars/${user.uid}`);
-    const unsubscribeAvatar = onValue(
-      avatarRef,
-      (snapshot) => {
-        const data = snapshot.val();
-        if (data && data.avatarBase64) {
-          setAvatarUrl(`data:image/jpeg;base64,${data.avatarBase64}`);
+          return () => {
+            unsubscribeGroups();
+            unsubscribeContacts();
+            unsubscribeAvatar();
+          };
         }
-      },
-      // (error) => {
-      //   console.error('Realtime Database avatar onValue error:', error);
-      //   console.log('Lỗi', 'Không thể tải ảnh đại diện.');
-      // }
-    );
-
-    return () => {
-      unsubscribeGroups();
-      unsubscribeContacts();
-      unsubscribeAvatar();
+      } catch (error) {
+        console.error('Error initializing user:', error);
+      }
     };
-  }, [user]);
+    initialize();
+  }, []);
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
@@ -152,7 +161,7 @@ export default function ContactListScreen({ navigation }: Props) {
   };
 
   const handlePickImage = async () => {
-    if (!user) return;
+    if (!userName) return;
 
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
@@ -173,7 +182,8 @@ export default function ContactListScreen({ navigation }: Props) {
 
       if (base64) {
         try {
-          const avatarRef = ref(realtimeDb, `avatars/${user.uid}`);
+          const uid = userName;
+          const avatarRef = ref(realtimeDb, `avatars/${uid}`);
           await set(avatarRef, { avatarBase64: base64 });
           setAvatarUrl(`data:image/jpeg;base64,${base64}`);
         } catch (error) {
@@ -206,7 +216,7 @@ export default function ContactListScreen({ navigation }: Props) {
   };
 
   const handleDelete = async (contactId: string) => {
-    if (!user) return;
+    if (!userName) return;
 
     const contact = contacts.find(c => c.id === contactId);
     if (!contact) {
@@ -224,7 +234,8 @@ export default function ContactListScreen({ navigation }: Props) {
           style: 'destructive',
           onPress: async () => {
             try {
-              const contactRef = doc(db, 'users', user.uid, 'contacts', contactId);
+              const uid = userName;
+              const contactRef = doc(db, 'users', uid, 'contacts', contactId);
               await deleteDoc(contactRef);
 
               const avatarRef = ref(realtimeDb, `contactAvatars/${contactId}`);
@@ -237,10 +248,9 @@ export default function ContactListScreen({ navigation }: Props) {
                 delete updatedAvatars[contactId];
                 return updatedAvatars;
               });
-
             } catch (error) {
-              console.error('Lỗi khi xóa liên hệ:', error);
-              Alert.alert('Lỗi', 'Không thể xóa liên hệ. Vui lòng thử lại.');
+              // console.error('Lỗi khi xóa liên hệ:', error);
+              // Alert.alert('Lỗi', 'Không thể xóa liên hệ. Vui lòng thử lại.');
             }
           },
         },
@@ -293,8 +303,7 @@ export default function ContactListScreen({ navigation }: Props) {
     );
   };
 
-  const renderItemContent = (item: Contact, swipeableRef: React.RefObject<Swipeable>) => {
-    // Lấy color trực tiếp từ groups dựa trên groupId
+  const renderItemContent = (item: Contact, swipeableRef: React.RefObject<Swipeable | null>) => {
     const groupColor = item.groupId ? groups.find(g => g.id === item.groupId)?.color : null;
 
     return (
@@ -327,7 +336,7 @@ export default function ContactListScreen({ navigation }: Props) {
   };
 
   const renderItem = ({ item }: { item: Contact }) => {
-    const swipeableRef = React.createRef<Swipeable>();
+    const swipeableRef = React.createRef<Swipeable | null>();
 
     return (
       <View style={styles.itemWrapper}>
@@ -365,7 +374,7 @@ export default function ContactListScreen({ navigation }: Props) {
             <TouchableOpacity onPress={handlePickImage}>
               <Image source={{ uri: avatarUrl }} style={styles.avatarAdmin} />
             </TouchableOpacity>
-            <Text style={styles.emailText}>{user?.email || 'Chưa đăng nhập'}</Text>
+            <Text style={styles.emailText}>{userName || 'Chưa đăng nhập'}</Text>
           </View>
           <View style={styles.headerBottom}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>

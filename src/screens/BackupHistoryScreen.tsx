@@ -20,9 +20,10 @@ import {
 import QRCode from 'react-native-qrcode-svg';
 import { captureRef } from 'react-native-view-shot';
 import { Contact, RootStackParamList } from '../../App';
-import { auth, db, realtimeDb } from '../../firebase';
+import { db, realtimeDb } from '../../firebase';
 import { appColors } from '../constants/Colors';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BackupHistory'>;
 
@@ -38,61 +39,73 @@ const BackupHistoryScreen = ({ navigation }: Props) => {
   const [isLoading, setIsLoading] = useState(false);
   const [mediaPermission, requestMediaPermission] = MediaLibrary.usePermissions();
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
-  const user = auth.currentUser;
+  const [userName, setUserName] = useState<string | null>(null);
   const qrRefs = useRef<{ [key: string]: View }>({});
   const animationValues = useRef<{ [key: string]: Animated.Value }>({}).current;
   const [copied, setCopied] = useState(false);
 
-
   useEffect(() => {
-    if (!user) return;
-
-    const loadBackupHistory = async () => {
-      setIsLoading(true);
+    const initialize = async () => {
       try {
-        const codesRef = collection(db, 'users', user.uid, 'backupCodes');
-        const q = query(codesRef, orderBy('createdAt', 'desc'));
-        const snapshot = await getDocs(q);
-        const items: BackupItem[] = [];
+        const name = await AsyncStorage.getItem('userName');
+        if (name) {
+          setUserName(name);
+          const loadBackupHistory = async () => {
+            setIsLoading(true);
+            try {
+              const codesRef = collection(db, 'users', name, 'backupCodes');
+              const q = query(codesRef, orderBy('createdAt', 'desc'));
+              const snapshot = await getDocs(q);
+              const items: BackupItem[] = [];
 
-        for (const doc of snapshot.docs) {
-          const { code, createdAt } = doc.data();
-          const backupRef = ref(realtimeDb, `sharedContacts/${code}`);
-          const backupSnapshot = await get(backupRef);
+              for (const doc of snapshot.docs) {
+                const { code, createdAt } = doc.data();
+                const backupRef = ref(realtimeDb, `sharedContacts/${code}`);
+                const backupSnapshot = await get(backupRef);
 
-          if (backupSnapshot.exists()) {
-            const backupData = backupSnapshot.val();
-            const contacts: Contact[] = backupData.contacts || [];
-            const options: string[] = ['Tên', 'Số'];
-            if (contacts.some(contact => contact.avatarBase64)) {
-              options.push('Ảnh');
+                if (backupSnapshot.exists()) {
+                  const backupData = backupSnapshot.val();
+                  const contacts: Contact[] = backupData.contacts || [];
+                  const options: string[] = ['Tên', 'Số'];
+                  if (contacts.some(contact => contact.avatarBase64)) {
+                    options.push('Ảnh');
+                  }
+                  if (contacts.some(contact => contact.email)) {
+                    options.push('Email');
+                  }
+
+                  items.push({
+                    code,
+                    createdAt,
+                    contactCount: contacts.length,
+                    options,
+                  });
+
+                  animationValues[code] = new Animated.Value(0);
+                }
+              }
+
+              setBackupItems(items);
+            } catch (error: any) {
+              console.error('Lỗi khi tải lịch sử sao lưu:', error);
+              Alert.alert('Lỗi', 'Không thể tải lịch sử sao lưu. Vui lòng thử lại.');
+            } finally {
+              setIsLoading(false);
             }
-            if (contacts.some(contact => contact.email)) {
-              options.push('Email');
-            }
-
-            items.push({
-              code,
-              createdAt,
-              contactCount: contacts.length,
-              options,
-            });
-
-            animationValues[code] = new Animated.Value(0);
-          }
+          };
+          loadBackupHistory();
+        } else {
+          Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
+          navigation.replace('Login');
         }
-
-        setBackupItems(items);
-      } catch (error: any) {
-        console.error('Lỗi khi tải lịch sử sao lưu: ', error);
-        Alert.alert('Lỗi', 'Không thể tải lịch sử sao lưu. Vui lòng thử lại.');
-      } finally {
-        setIsLoading(false);
+      } catch (error) {
+        console.error('Error reading userName from AsyncStorage:', error);
+        Alert.alert('Lỗi', 'Không thể tải thông tin người dùng.');
+        navigation.replace('Login');
       }
     };
-
-    loadBackupHistory();
-  }, [user, animationValues]);
+    initialize();
+  }, [navigation, animationValues]);
 
   const handleDownloadQR = useCallback(async (code: string) => {
     if (Platform.OS === 'web') {
@@ -134,8 +147,8 @@ const BackupHistoryScreen = ({ navigation }: Props) => {
           uri = await captureRef(qrView, {
             format: 'png',
             quality: 1,
-            width: 350, 
-            height: 430, 
+            width: 350,
+            height: 430,
           });
           console.log('Ảnh chụp:', uri);
           break;
@@ -163,7 +176,7 @@ const BackupHistoryScreen = ({ navigation }: Props) => {
 
       await FileSystem.deleteAsync(cacheUri, { idempotent: true });
     } catch (error: any) {
-      console.error('Lỗi khi tải mã QR: ', error);
+      console.error('Lỗi khi tải mã QR:', error);
       Alert.alert('Lỗi', `Không thể tải mã QR: ${error.message || 'Vui lòng thử lại.'}`);
     } finally {
       setIsLoading(false);
@@ -187,7 +200,7 @@ const BackupHistoryScreen = ({ navigation }: Props) => {
       }
       setExpandedItem(code);
       Animated.timing(animationValues[code], {
-        toValue: 460, 
+        toValue: 460,
         duration: 300,
         useNativeDriver: false,
       }).start();
@@ -429,6 +442,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 20,
-    opacity: 0.8
-  }
+    opacity: 0.8,
+  },
 });

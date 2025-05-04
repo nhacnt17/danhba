@@ -2,15 +2,16 @@ import React, { useState } from 'react';
 import { StyleSheet, View, TextInput, TouchableOpacity, Text, Alert } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
-import { auth } from '../../firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { db } from '../../firebase';
+import { collection, addDoc } from 'firebase/firestore';
 import { Eye, EyeSlash } from 'iconsax-react-native';
 import { appColors } from '../constants/Colors';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Register'>;
 
 export default function RegisterScreen({ navigation }: Props) {
-  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -22,10 +23,13 @@ export default function RegisterScreen({ navigation }: Props) {
       return;
     }
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
+      await addDoc(collection(db, 'users'), { name, password });
+      await AsyncStorage.setItem('isLoggedIn', 'true');
+      await AsyncStorage.setItem('userName', name);
+      navigation.replace('ContactList');
     } catch (error: any) {
-      Alert.alert('Lỗi', error.message);
-      console.log(error.message);
+      Alert.alert('Lỗi', 'Không thể đăng ký. Vui lòng thử lại.');
+      console.log('Register error:', error.message);
     }
   };
 
@@ -37,11 +41,10 @@ export default function RegisterScreen({ navigation }: Props) {
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.input}
-            placeholder="Email"
+            placeholder="Tên"
             placeholderTextColor="#8a9ba5"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
+            value={name}
+            onChangeText={setName}
             autoCapitalize="none"
           />
           <View style={styles.passwordContainer}>
@@ -57,10 +60,11 @@ export default function RegisterScreen({ navigation }: Props) {
               style={styles.eyeIcon}
               onPress={() => setShowPassword(!showPassword)}
             >
-              {showPassword
-                ? <Eye size="26" color={appColors.primary} variant="Bulk" />
-                : <EyeSlash size="26" color={appColors.primary} variant="Bulk" />
-              }
+              {showPassword ? (
+                <Eye size="26" color={appColors.primary} variant="Bulk" />
+              ) : (
+                <EyeSlash size="26" color={appColors.primary} variant="Bulk" />
+              )}
             </TouchableOpacity>
           </View>
           <View style={styles.passwordContainer}>
@@ -76,10 +80,11 @@ export default function RegisterScreen({ navigation }: Props) {
               style={styles.eyeIcon}
               onPress={() => setShowConfirmPassword(!showConfirmPassword)}
             >
-              {showConfirmPassword
-                ? <Eye size="26" color={appColors.primary} variant="Bulk" />
-                : <EyeSlash size="26" color={appColors.primary} variant="Bulk" />
-              }
+              {showConfirmPassword ? (
+                <Eye size="26" color={appColors.primary} variant="Bulk" />
+              ) : (
+                <EyeSlash size="26" color={appColors.primary} variant="Bulk" />
+              )}
             </TouchableOpacity>
           </View>
         </View>

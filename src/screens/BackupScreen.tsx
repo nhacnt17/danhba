@@ -21,9 +21,10 @@ import { ScrollView } from 'react-native-gesture-handler';
 import QRCode from 'react-native-qrcode-svg';
 import { captureRef } from 'react-native-view-shot';
 import { Contact, RootStackParamList } from '../../App';
-import { auth, db, realtimeDb } from '../../firebase';
+import { db, realtimeDb } from '../../firebase';
 import { appColors } from '../constants/Colors';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Backup'>;
 
@@ -36,39 +37,51 @@ const BackupScreen = ({ navigation }: Props) => {
   const [includeEmail, setIncludeEmail] = useState(false);
   const [copied, setCopied] = useState(false);
   const [mediaPermission, requestMediaPermission] = MediaLibrary.usePermissions();
+  const [userName, setUserName] = useState<string | null>(null);
   const qrViewRef = useRef<View>(null);
-  const user = auth.currentUser;
-
 
   useEffect(() => {
-    if (!user) return;
-
-    const loadLatestCode = async () => {
+    const initialize = async () => {
       try {
-        const codesRef = collection(db, 'users', user.uid, 'backupCodes');
-        const q = query(codesRef, orderBy('createdAt', 'desc'), limit(1));
-        const snapshot = await getDocs(q);
-        if (!snapshot.empty) {
-          const latestBackup = snapshot.docs[0].data();
-          setShareCode(latestBackup.code);
-          const date = new Date(latestBackup.createdAt);
-          setLatestBackupTime(
-            date.toLocaleString('vi-VN', {
-              day: '2-digit',
-              month: '2-digit',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-            })
-          );
+        const name = await AsyncStorage.getItem('userName');
+        if (name) {
+          setUserName(name);
+          const loadLatestCode = async () => {
+            try {
+              const codesRef = collection(db, 'users', name, 'backupCodes');
+              const q = query(codesRef, orderBy('createdAt', 'desc'), limit(1));
+              const snapshot = await getDocs(q);
+              if (!snapshot.empty) {
+                const latestBackup = snapshot.docs[0].data();
+                setShareCode(latestBackup.code);
+                const date = new Date(latestBackup.createdAt);
+                setLatestBackupTime(
+                  date.toLocaleString('vi-VN', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })
+                );
+              }
+            } catch (error: any) {
+              console.error('Lỗi khi tải mã sao lưu:', error);
+            }
+          };
+          loadLatestCode();
+        } else {
+          Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
+          navigation.replace('Login');
         }
-      } catch (error: any) {
-        console.error('Lỗi khi tải mã sao lưu: ', error);
+      } catch (error) {
+        console.error('Error reading userName from AsyncStorage:', error);
+        Alert.alert('Lỗi', 'Không thể tải thông tin người dùng.');
+        navigation.replace('Login');
       }
     };
-
-    loadLatestCode();
-  }, [user]);
+    initialize();
+  }, [navigation]);
 
   const generateRandomCode = () => {
     const characters = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -81,15 +94,16 @@ const BackupScreen = ({ navigation }: Props) => {
 
   const performBackup = async () => {
     setShowModal(false);
-    if (!user) {
-      Alert.alert('Lỗi', 'Bạn cần đăng nhập để sao lưu dữ liệu');
+    if (!userName) {
+      Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
+      navigation.replace('Login');
       return;
     }
 
     setIsLoading(true);
 
     try {
-      const contactsRef = collection(db, 'users', user.uid, 'contacts');
+      const contactsRef = collection(db, 'users', userName, 'contacts');
       const snapshot = await getDocs(contactsRef);
       const contacts: Contact[] = snapshot.docs.map(doc => {
         const data = doc.data();
@@ -111,7 +125,7 @@ const BackupScreen = ({ navigation }: Props) => {
       const code = generateRandomCode();
       const createdAt = Date.now();
       const backupData = {
-        userId: user.uid,
+        userId: userName,
         contacts,
         createdAt,
       };
@@ -119,7 +133,7 @@ const BackupScreen = ({ navigation }: Props) => {
       const backupRef = ref(realtimeDb, `sharedContacts/${code}`);
       await set(backupRef, backupData);
 
-      const codesRef = collection(db, 'users', user.uid, 'backupCodes');
+      const codesRef = collection(db, 'users', userName, 'backupCodes');
       await addDoc(codesRef, {
         code,
         createdAt,
@@ -138,7 +152,7 @@ const BackupScreen = ({ navigation }: Props) => {
       );
       Alert.alert('Thành công', `Mã sao lưu của bạn: ${code}. Mã QR đã được tạo để chia sẻ.`);
     } catch (error: any) {
-      console.error('Lỗi khi sao lưu dữ liệu: ', error);
+      console.error('Lỗi khi sao lưu dữ liệu:', error);
       Alert.alert('Lỗi', 'Không thể sao lưu dữ liệu. Vui lòng thử lại.');
     } finally {
       setIsLoading(false);
@@ -199,7 +213,7 @@ const BackupScreen = ({ navigation }: Props) => {
 
       await FileSystem.deleteAsync(cacheUri, { idempotent: true });
     } catch (error: any) {
-      console.error('Lỗi khi tải mã QR: ', error);
+      console.error('Lỗi khi tải mã QR:', error);
       Alert.alert('Lỗi', `Không thể tải mã QR: ${error.message || 'Vui lòng thử lại.'}`);
     } finally {
       setIsLoading(false);
@@ -211,7 +225,6 @@ const BackupScreen = ({ navigation }: Props) => {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
-
 
   return (
     <View style={{ flex: 1, backgroundColor: appColors.secondary }}>
@@ -514,6 +527,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 20,
-    opacity: 0.8
-  }
+    opacity: 0.8,
+  },
 });

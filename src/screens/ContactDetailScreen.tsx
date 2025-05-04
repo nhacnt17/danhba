@@ -13,9 +13,10 @@ import {
   View,
 } from 'react-native';
 import { Contact, Group, RootStackParamList } from '../../App';
-import { auth, db, realtimeDb } from '../../firebase';
+import { db, realtimeDb } from '../../firebase';
 import { appColors } from '../constants/Colors';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ContactDetail'>;
 
@@ -26,8 +27,27 @@ export default function ContactDetailScreen({ navigation, route }: Props) {
   );
   const [group, setGroup] = useState<Group | null>(initialGroup || null);
   const [isLoadingGroup, setIsLoadingGroup] = useState<boolean>(!initialGroup && !!contact.groupId);
+  const [userName, setUserName] = useState<string | null>(null);
 
   useEffect(() => {
+    // Lấy userName từ AsyncStorage
+    const initialize = async () => {
+      try {
+        const name = await AsyncStorage.getItem('userName');
+        if (name) {
+          setUserName(name);
+        } else {
+          Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
+          navigation.replace('Login');
+        }
+      } catch (error) {
+        console.error('Error reading userName from AsyncStorage:', error);
+        Alert.alert('Lỗi', 'Không thể tải thông tin người dùng.');
+        navigation.replace('Login');
+      }
+    };
+    initialize();
+
     // Lấy ảnh đại diện từ Realtime Database
     const avatarRef = ref(realtimeDb, `contactAvatars/${contact.id}`);
     const unsubscribe = onValue(
@@ -40,14 +60,17 @@ export default function ContactDetailScreen({ navigation, route }: Props) {
           setAvatarUrl(`data:image/jpeg;base64,${contact.avatarBase64}`);
         }
       },
+      // (error) => {
+      //   console.error('Realtime Database onValue error:', error);
+      // }
     );
 
     // Lấy thông tin nhóm từ Firestore nếu không có initialGroup
     const fetchGroup = async () => {
-      if (!initialGroup && contact.groupId && auth.currentUser) {
+      if (!initialGroup && contact.groupId && userName) {
         try {
           setIsLoadingGroup(true);
-          const groupRef = doc(db, 'users', auth.currentUser.uid, 'groups', contact.groupId);
+          const groupRef = doc(db, 'users', userName, 'groups', contact.groupId);
           const groupSnap = await getDoc(groupRef);
           if (groupSnap.exists()) {
             const groupData = { id: groupSnap.id, ...groupSnap.data() } as Group;
@@ -64,10 +87,12 @@ export default function ContactDetailScreen({ navigation, route }: Props) {
       }
     };
 
-    fetchGroup();
+    if (userName) {
+      fetchGroup();
+    }
 
     return () => unsubscribe();
-  }, [contact.id, contact.avatarBase64, contact.groupId, initialGroup]);
+  }, [contact.id, contact.avatarBase64, contact.groupId, initialGroup, userName]);
 
   const handleEdit = () => {
     navigation.navigate('AddEditContact', {
@@ -80,6 +105,12 @@ export default function ContactDetailScreen({ navigation, route }: Props) {
   };
 
   const handleDelete = () => {
+    if (!userName) {
+      Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
+      navigation.replace('Login');
+      return;
+    }
+
     Alert.alert(
       'Xác nhận',
       `Bạn có chắc muốn xóa liên hệ "${contact.name}"?`,
@@ -90,13 +121,13 @@ export default function ContactDetailScreen({ navigation, route }: Props) {
           style: 'destructive',
           onPress: async () => {
             try {
-              await deleteDoc(doc(db, 'users', auth.currentUser!.uid, 'contacts', contact.id));
+              await deleteDoc(doc(db, 'users', userName, 'contacts', contact.id));
               console.log('Đã xóa liên hệ:', contact.id);
               Alert.alert('Thành công', 'Liên hệ đã được xóa.');
               navigation.goBack();
             } catch (error: any) {
-              console.error('Lỗi khi xóa liên hệ:', error);
-              Alert.alert('Lỗi', 'Không thể xóa liên hệ. Vui lòng thử lại.');
+              // console.error('Lỗi khi xóa liên hệ:', error);
+              // Alert.alert('Lỗi', 'Không thể xóa liên hệ. Vui lòng thử lại.');
             }
           },
         },

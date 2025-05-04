@@ -1,32 +1,56 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { signOut } from 'firebase/auth';
 import { ArrowCircleLeft } from 'iconsax-react-native';
-import React from 'react';
-import { Alert, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { RootStackParamList } from '../../App';
-import { auth } from '../../firebase';
 import { appColors } from '../constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Setting'>;
 
-const USER_STORAGE_KEY = '@user';
-const CREDENTIALS_STORAGE_KEY = '@credentials';
-
 const SettingScreen = ({ navigation }: Props) => {
+  const [loggingOut, setLoggingOut] = useState(false);
+
   const handleLogout = async () => {
+    setLoggingOut(true);
     try {
-      await signOut(auth);
-      navigation.navigate('Login');
-      // Xóa thông tin user và credentials khỏi AsyncStorage
-      await AsyncStorage.removeItem(USER_STORAGE_KEY);
-      await AsyncStorage.removeItem(CREDENTIALS_STORAGE_KEY);
-      console.log('User logged out successfully and AsyncStorage cleared');
+      await AsyncStorage.removeItem('isLoggedIn');
+      await AsyncStorage.removeItem('userName');
+      navigation.replace('Login');
     } catch (error) {
       console.error('Lỗi khi đăng xuất:', error);
       Alert.alert('Lỗi', 'Không thể đăng xuất. Vui lòng thử lại.');
+      setLoggingOut(false);
     }
   };
+
+  const confirmLogout = () => {
+    Alert.alert(
+      'Xác nhận đăng xuất',
+      'Bạn có chắc chắn muốn đăng xuất?',
+      [
+        {
+          text: 'Huỷ',
+          style: 'cancel',
+        },
+        {
+          text: 'Đăng xuất',
+          style: 'destructive',
+          onPress: () => handleLogout(),
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  if (loggingOut) {
+    return (
+      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: appColors.primary }}>
+        <ActivityIndicator size="large" color="#fff" />
+        <Text style={{ color: '#fff', marginTop: 20 }}>Đang đăng xuất...</Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: appColors.primary }}>
@@ -39,6 +63,7 @@ const SettingScreen = ({ navigation }: Props) => {
         <Text style={styles.tileHeader}>Cài đặt</Text>
         <View style={{ width: 50 }} />
       </View>
+
       <View style={styles.container}>
         <TouchableOpacity
           style={styles.button}
@@ -54,11 +79,10 @@ const SettingScreen = ({ navigation }: Props) => {
           <Text style={styles.buttonText}>Áp dụng mã chia sẻ</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+        <TouchableOpacity style={styles.logoutButton} onPress={confirmLogout}>
           <Text style={styles.logoutText}>Đăng xuất</Text>
         </TouchableOpacity>
       </View>
-
     </SafeAreaView>
   );
 };
@@ -85,12 +109,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: appColors.secondary,
     fontWeight: 'bold',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: appColors.primary,
-    marginBottom: 20,
   },
   button: {
     width: '100%',

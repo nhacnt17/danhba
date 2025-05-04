@@ -19,9 +19,10 @@ import {
 } from 'react-native';
 import ActionSheet, { ActionSheetRef } from 'react-native-actions-sheet';
 import { Contact, Group, RootStackParamList } from '../../App';
-import { auth, db, realtimeDb } from '../../firebase';
+import { db, realtimeDb } from '../../firebase';
 import { appColors } from '../constants/Colors';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddEditContact'>;
 
@@ -39,7 +40,7 @@ export default function AddEditContactScreen({ navigation, route }: Props) {
   const [newGroupColor, setNewGroupColor] = useState('#FF0000');
   const [showAddGroupModal, setShowAddGroupModal] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
-  const user = auth.currentUser;
+  const [userName, setUserName] = useState<string | null>(null);
   const actionSheetRef = useRef<ActionSheetRef>(null);
 
   const { contact } = route.params || {};
@@ -66,33 +67,43 @@ export default function AddEditContactScreen({ navigation, route }: Props) {
 
   // Lấy danh sách nhóm và tạo nhóm mặc định nếu cần
   useEffect(() => {
-    if (!user) return;
-
-    const groupsRef = collection(db, 'users', user.uid, 'groups');
-    getDocs(groupsRef).then(async snapshot => {
-      if (snapshot.empty) {
-        // Tạo nhóm mặc định
-        const defaultGroups = [
-          { name: 'Gia đình', color: '#FF0000' },
-          { name: 'Công việc', color: '#0000FF' },
-          { name: 'Bạn bè', color: '#00FF00' },
-        ];
-        for (const group of defaultGroups) {
-          await addDoc(groupsRef, group);
+    const initialize = async () => {
+      try {
+        const name = await AsyncStorage.getItem('userName');
+        if (name) {
+          setUserName(name);
+          const groupsRef = collection(db, 'users', name, 'groups');
+          const snapshot = await getDocs(groupsRef);
+          if (snapshot.empty) {
+            // Tạo nhóm mặc định
+            const defaultGroups = [
+              { name: 'Gia đình', color: '#FF0000' },
+              { name: 'Công việc', color: '#0000FF' },
+              { name: 'Bạn bè', color: '#00FF00' },
+            ];
+            for (const group of defaultGroups) {
+              await addDoc(groupsRef, group);
+            }
+          }
+          // Lấy lại danh sách nhóm
+          const groupList: Group[] = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+          } as Group));
+          setGroups(groupList);
+          console.log('Groups loaded:', groupList);
+        } else {
+          Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
+          navigation.replace('Login');
         }
+      } catch (error) {
+        console.error('Error initializing:', error);
+        Alert.alert('Lỗi', 'Không thể tải thông tin người dùng hoặc danh sách nhóm.');
+        navigation.replace('Login');
       }
-      // Lấy lại danh sách nhóm
-      const groupList: Group[] = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      } as Group));
-      setGroups(groupList);
-      console.log('Groups loaded:', groupList);
-    }).catch(error => {
-      console.error('Error loading groups:', error);
-      Alert.alert('Lỗi', 'Không thể tải danh sách nhóm.');
-    });
-  }, [user]);
+    };
+    initialize();
+  }, [navigation]);
 
   const handlePickImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -122,8 +133,9 @@ export default function AddEditContactScreen({ navigation, route }: Props) {
       Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ tên và số điện thoại');
       return;
     }
-    if (!user) {
-      Alert.alert('Lỗi', 'Bạn cần đăng nhập để lưu liên hệ');
+    if (!userName) {
+      Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
+      navigation.replace('Login');
       return;
     }
 
@@ -139,7 +151,7 @@ export default function AddEditContactScreen({ navigation, route }: Props) {
     };
 
     try {
-      const contactsRef = collection(db, 'users', user.uid, 'contacts');
+      const contactsRef = collection(db, 'users', userName, 'contacts');
       let contactId = contactData.id;
 
       if (contactData.id) {
@@ -173,7 +185,7 @@ export default function AddEditContactScreen({ navigation, route }: Props) {
       setIsLoading(false);
       navigation.goBack();
     } catch (error) {
-      console.error('Lỗi khi lưu vào Firestore/Realtime Database: ', error);
+      console.error('Lỗi khi lưu vào Firestore/Realtime Database:', error);
       setIsLoading(false);
       Alert.alert('Lỗi', 'Không thể lưu liên hệ. Kiểm tra kết nối hoặc quyền.');
     }
@@ -184,10 +196,14 @@ export default function AddEditContactScreen({ navigation, route }: Props) {
       Alert.alert('Lỗi', 'Vui lòng nhập tên nhóm');
       return;
     }
-    if (!user) return;
+    if (!userName) {
+      Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
+      navigation.replace('Login');
+      return;
+    }
 
     try {
-      const groupsRef = collection(db, 'users', user.uid, 'groups');
+      const groupsRef = collection(db, 'users', userName, 'groups');
       const docRef = await addDoc(groupsRef, {
         name: newGroupName,
         color: newGroupColor,
@@ -206,7 +222,11 @@ export default function AddEditContactScreen({ navigation, route }: Props) {
   };
 
   const handleDeleteGroup = async (groupId: string) => {
-    if (!user) return;
+    if (!userName) {
+      Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
+      navigation.replace('Login');
+      return;
+    }
 
     Keyboard.dismiss(); // Ẩn bàn phím trước khi xóa nhóm
 
@@ -220,7 +240,7 @@ export default function AddEditContactScreen({ navigation, route }: Props) {
           style: 'destructive',
           onPress: async () => {
             try {
-              const groupRef = doc(db, 'users', user.uid, 'groups', groupId);
+              const groupRef = doc(db, 'users', userName, 'groups', groupId);
               await deleteDoc(groupRef);
               setGroups(prev => prev.filter(group => group.id !== groupId));
               if (groupId === groupId) {
@@ -280,7 +300,7 @@ export default function AddEditContactScreen({ navigation, route }: Props) {
   );
 
   // Debug state
-  console.log('showAddGroupModal:', showAddGroupModal, 'showColorPicker:', showColorPicker);
+  // console.log('showAddGroupModal:', showAddGroupModal, 'showColorPicker:', showColorPicker);
 
   return (
     <View style={{ flex: 1, backgroundColor: appColors.secondary }}>

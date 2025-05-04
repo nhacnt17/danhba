@@ -2,53 +2,34 @@ import React, { useState } from 'react';
 import { StyleSheet, View, TextInput, TouchableOpacity, Text, Alert } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
-import { auth } from '../../firebase';
-import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { db } from '../../firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { Eye, EyeSlash } from 'iconsax-react-native';
 import { appColors } from '../constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
-const USER_STORAGE_KEY = '@user';
-const CREDENTIALS_STORAGE_KEY = '@credentials';
-
 export default function LoginScreen({ navigation }: Props) {
-  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
+      const q = query(collection(db, 'users'), where('name', '==', name), where('password', '==', password));
+      const querySnapshot = await getDocs(q);
 
-      // Lưu user và thông tin đăng nhập vào AsyncStorage
-      const userData = {
-        uid: user.uid,
-        email: user.email,
-      };
-      await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData));
-      await AsyncStorage.setItem(CREDENTIALS_STORAGE_KEY, JSON.stringify({ email, password }));
-      console.log('User and credentials stored after login:', user.uid);
+      if (!querySnapshot.empty) {
+        await AsyncStorage.setItem('isLoggedIn', 'true');
+        await AsyncStorage.setItem('userName', name);
+        navigation.replace('ContactList');
+      } else {
+        Alert.alert('Lỗi', 'Tên hoặc mật khẩu không chính xác');
+      }
     } catch (error: any) {
-      Alert.alert('Lỗi', 'Tài khoản không tồn tại hoặc mật khẩu không chính xác');
+      Alert.alert('Lỗi', 'Không thể đăng nhập. Vui lòng kiểm tra kết nối.');
       console.log('Login error:', error.message);
-    }
-  };
-
-  const handleForgotPassword = async () => {
-    if (!email) {
-      Alert.alert('Lỗi', 'Vui lòng nhập email để đặt lại mật khẩu.');
-      return;
-    }
-
-    try {
-      await sendPasswordResetEmail(auth, email);
-      Alert.alert('Thành công', 'Email đặt lại mật khẩu đã được gửi. Vui lòng kiểm tra hộp thư của bạn.');
-    } catch (error: any) {
-      Alert.alert('Lỗi', 'Không thể gửi email đặt lại mật khẩu. Vui lòng kiểm tra lại địa chỉ email của bạn.');
-      console.log('Forgot password error:', error.message);
     }
   };
 
@@ -60,11 +41,10 @@ export default function LoginScreen({ navigation }: Props) {
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.input}
-            placeholder="Email"
+            placeholder="Tên"
             placeholderTextColor="#8a9ba5"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
+            value={name}
+            onChangeText={setName}
             autoCapitalize="none"
           />
           <View style={styles.passwordContainer}>
@@ -91,10 +71,6 @@ export default function LoginScreen({ navigation }: Props) {
 
         <TouchableOpacity style={styles.button} onPress={handleLogin}>
           <Text style={styles.buttonText}>Đăng nhập</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={handleForgotPassword}>
-          <Text style={styles.forgotPassword}>Quên mật khẩu?</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -180,13 +156,6 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 18,
     fontWeight: '600',
-  },
-  forgotPassword: {
-    marginTop: 16,
-    color: '#1c4550',
-    textAlign: 'center',
-    fontSize: 16,
-    fontWeight: '500',
   },
   registerLink: {
     marginTop: 24,
