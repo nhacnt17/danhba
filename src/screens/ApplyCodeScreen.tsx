@@ -1,9 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { get, ref, set } from 'firebase/database';
 import { addDoc, collection, getDocs } from 'firebase/firestore';
-import { ArrowCircleLeft } from 'iconsax-react-native';
+import { TextalignLeft } from 'iconsax-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -18,16 +17,22 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Contact, RootStackParamList } from '../../App';
+import { Contact, DrawerParamList, RootStackParamList } from '../../App';
 import { db, realtimeDb } from '../../firebase';
 import { appColors } from '../constants/Colors';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'ApplyCode'>;
+import { DrawerScreenProps } from '@react-navigation/drawer';
+import { CommonActions, NavigationProp } from '@react-navigation/native';
+
+// Combine DrawerScreenProps with a NavigationProp for RootStackParamList
+type Props = DrawerScreenProps<DrawerParamList, 'ApplyCode'> & {
+  navigation: NavigationProp<RootStackParamList>;
+};
 
 const ApplyCodeScreen = ({ navigation }: Props) => {
   const [inputCode, setInputCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [showScanner, setShowScanner] = useState(false);
+  const [showScanner, setShowScanner] = useState(true); // Mặc định hiển thị quét mã QR
   const [hasScanned, setHasScanned] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -41,12 +46,22 @@ const ApplyCodeScreen = ({ navigation }: Props) => {
           setUserEmail(email);
         } else {
           Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
-          navigation.replace('Login');
+          navigation.dispatch(
+            CommonActions.reset({
+              index: 0,
+              routes: [{ name: 'Login' }],
+            })
+          );
         }
       } catch (error) {
         console.error('Error reading userEmail from AsyncStorage:', error);
         Alert.alert('Lỗi', 'Không thể tải thông tin người dùng.');
-        navigation.replace('Login');
+        navigation.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'Login' }],
+          })
+        );
       }
     };
     initialize();
@@ -61,7 +76,12 @@ const ApplyCodeScreen = ({ navigation }: Props) => {
     if (!userEmail) {
       Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
       setIsLoading(false);
-      navigation.replace('Login');
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        })
+      );
       return;
     }
 
@@ -103,7 +123,17 @@ const ApplyCodeScreen = ({ navigation }: Props) => {
       let addedCount = 0;
       let skippedCount = 0;
 
-      for (const contact of sharedContacts) {
+      // Lọc trùng lặp trước khi thêm
+      const uniqueSharedContacts = Array.from(
+        new Map(
+          sharedContacts.map(contact => [
+            `${contact.name.toLowerCase()}_${contact.phone}_${contact.email || ''}`,
+            contact,
+          ])
+        ).values()
+      );
+
+      for (const contact of uniqueSharedContacts) {
         const isDuplicate = currentContacts.some(
           existing =>
             existing.name.toLowerCase() === contact.name.toLowerCase() &&
@@ -130,8 +160,7 @@ const ApplyCodeScreen = ({ navigation }: Props) => {
 
       let message = `Đã thêm ${addedCount} liên hệ`;
       if (addedCount > 0) {
-        message += ` (bao gồm tên, số${includeAvatar ? ', ảnh' : ''}${includeAvatar && includeEmail ? ', ' : ''
-          }${includeEmail ? 'email' : ''}).`;
+        message += ` (bao gồm tên, số${includeAvatar ? ', ảnh' : ''}${includeAvatar && includeEmail ? ', ' : ''}${includeEmail ? 'email' : ''}).`;
       } else {
         message += '.';
       }
@@ -140,15 +169,13 @@ const ApplyCodeScreen = ({ navigation }: Props) => {
       }
       Alert.alert('Thành công', message);
       setInputCode('');
-      setShowScanner(false);
+      setShowScanner(true); // Quay lại quét mã QR sau khi áp dụng thành công
       setHasScanned(true);
     } catch (error: any) {
       console.error('Lỗi khi áp dụng mã:', error);
       Alert.alert('Lỗi', 'Không thể áp dụng mã. Vui lòng thử lại.');
     } finally {
       setIsLoading(false);
-      setShowScanner(false);
-      setHasScanned(false);
     }
   };
 
@@ -181,17 +208,31 @@ const ApplyCodeScreen = ({ navigation }: Props) => {
 
   const handleBarCodeScanned = ({ data }: { data: string }) => {
     if (hasScanned || isProcessingScan.current) {
-      console.log('Bỏ qua quét:', data);
       return;
     }
 
     isProcessingScan.current = true;
-    console.log('Đã quét mã QR:', data);
+    console.log('Đã quét mã QR:', data); // Log để debug
     setHasScanned(true);
-    setShowScanner(false);
+    setShowScanner(true); // Giữ giao diện quét
     console.log('Đóng máy quét sau khi quét');
     setInputCode(data);
     handleApplyCode(data);
+  };
+
+  const handleManualInput = () => {
+    if (isLoading || isProcessingScan.current) {
+      return; // Không cho phép chuyển sang nhập mã thủ công khi đang xử lý
+    }
+    setShowScanner(false); // Chuyển sang giao diện nhập mã thủ công
+    setHasScanned(false);
+    setInputCode(''); // Xóa mã cũ khi chuyển sang nhập thủ công
+  };
+
+  const handleCloseScanner = () => {
+    setShowScanner(false);
+    setHasScanned(false);
+    isProcessingScan.current = false;
   };
 
   return (
@@ -199,8 +240,8 @@ const ApplyCodeScreen = ({ navigation }: Props) => {
       <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: appColors.primary }}>
         <View style={styles.Header}>
           <View style={{ width: 50 }}>
-            <TouchableOpacity onPress={() => navigation.goBack()}>
-              <ArrowCircleLeft size="34" color="#FF8A65" variant="Bulk" />
+            <TouchableOpacity onPress={() => navigation.openDrawer()}>
+              <TextalignLeft size="24" color="#FF8A65" variant="Bulk" />
             </TouchableOpacity>
           </View>
           <Text style={styles.tileHeader}>Áp dụng mã chia sẻ</Text>
@@ -208,28 +249,7 @@ const ApplyCodeScreen = ({ navigation }: Props) => {
         </View>
 
         <View style={styles.container}>
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Nhập hoặc quét mã</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Nhập mã chia sẻ"
-              value={inputCode}
-              onChangeText={setInputCode}
-              autoCapitalize="none"
-            />
-            <TouchableOpacity
-              style={styles.button}
-              onPress={() => handleApplyCode(inputCode)}
-              disabled={isLoading}
-            >
-              <Text style={styles.buttonText}>Áp dụng mã</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.button} onPress={handleScanQR} disabled={isLoading}>
-              <Text style={styles.buttonText}>Quét mã QR</Text>
-            </TouchableOpacity>
-          </View>
-
-          {showScanner && (
+          {showScanner ? (
             <View style={styles.scannerContainer}>
               <CameraView
                 style={StyleSheet.absoluteFillObject}
@@ -240,16 +260,36 @@ const ApplyCodeScreen = ({ navigation }: Props) => {
                 enableTorch={false}
               />
               <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => {
-                  setShowScanner(false);
-                  setHasScanned(false);
-                  isProcessingScan.current = false;
-                }}
+                style={styles.manualButton}
+                onPress={handleManualInput}
+                disabled={isLoading || isProcessingScan.current}
               >
-                <Text style={styles.closeButtonText}>Đóng</Text>
+                <Text style={styles.manualButtonText}>Nhập mã</Text>
               </TouchableOpacity>
             </View>
+          ) : (
+            !isLoading && ( // Chỉ hiển thị container nhập mã khi không loading
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Nhập mã thủ công</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Nhập mã chia sẻ"
+                  value={inputCode}
+                  onChangeText={setInputCode}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  style={styles.button}
+                  onPress={() => handleApplyCode(inputCode)}
+                  disabled={isLoading}
+                >
+                  <Text style={styles.buttonText}>Áp dụng mã</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.button} onPress={handleScanQR} disabled={isLoading}>
+                  <Text style={styles.buttonText}>Quét mã QR</Text>
+                </TouchableOpacity>
+              </View>
+            )
           )}
 
           {isLoading && (
@@ -321,8 +361,24 @@ const styles = StyleSheet.create({
   scannerContainer: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   closeButton: {
+    position: 'absolute',
+    bottom: 80,
+    alignSelf: 'center',
+    backgroundColor: appColors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  closeButtonText: {
+    color: appColors.secondary,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  manualButton: {
     position: 'absolute',
     bottom: 20,
     alignSelf: 'center',
@@ -331,7 +387,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     borderRadius: 8,
   },
-  closeButtonText: {
+  manualButtonText: {
     color: appColors.secondary,
     fontSize: 16,
     fontWeight: 'bold',

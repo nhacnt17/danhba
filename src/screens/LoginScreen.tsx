@@ -16,6 +16,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { Eye, EyeSlash } from 'iconsax-react-native';
 import { appColors } from '../constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CommonActions } from '@react-navigation/native'; // Thêm import này để sử dụng reset
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
@@ -37,7 +38,14 @@ export default function LoginScreen({ navigation }: Props) {
       if (userSnap.exists() && userSnap.data().password === password) {
         await AsyncStorage.setItem('isLoggedIn', 'true');
         await AsyncStorage.setItem('userEmail', normalizedEmail);
-        navigation.replace('ContactList');
+        
+        // Sử dụng reset để đặt lại stack và điều hướng đến MainDrawer với ContactList
+        navigation.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'MainDrawer', params: { screen: 'ContactList' } }],
+          })
+        );
       } else {
         Alert.alert('Lỗi', 'Email hoặc mật khẩu không chính xác');
       }

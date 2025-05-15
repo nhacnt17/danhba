@@ -5,6 +5,7 @@ import { deleteDoc, doc, getDoc } from 'firebase/firestore';
 import { ArrowCircleLeft, Call, Message, Sms } from 'iconsax-react-native';
 import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Image,
   Linking,
@@ -27,13 +28,14 @@ export default function ContactDetailScreen({ navigation, route }: Props) {
   );
   const [group, setGroup] = useState<Group | null>(initialGroup || null);
   const [isLoadingGroup, setIsLoadingGroup] = useState<boolean>(!initialGroup && !!contact.groupId);
-  const [userEmail, setUserEmail] = useState<string | null>(null); 
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false); // Thêm state để quản lý trạng thái xóa
 
   useEffect(() => {
     // Lấy userEmail từ AsyncStorage
     const initialize = async () => {
       try {
-        const email = await AsyncStorage.getItem('userEmail'); 
+        const email = await AsyncStorage.getItem('userEmail');
         if (email) {
           setUserEmail(email);
         } else {
@@ -59,18 +61,15 @@ export default function ContactDetailScreen({ navigation, route }: Props) {
         } else if (contact.avatarBase64) {
           setAvatarUrl(`data:image/jpeg;base64,${contact.avatarBase64}`);
         }
-      },
-      // (error) => {
-      //   console.error('Realtime Database onValue error:', error);
-      // }
+      }
     );
 
     // Lấy thông tin nhóm từ Firestore nếu không có initialGroup
     const fetchGroup = async () => {
-      if (!initialGroup && contact.groupId && userEmail) { 
+      if (!initialGroup && contact.groupId && userEmail) {
         try {
           setIsLoadingGroup(true);
-          const groupRef = doc(db, 'users', userEmail, 'groups', contact.groupId); 
+          const groupRef = doc(db, 'users', userEmail, 'groups', contact.groupId);
           const groupSnap = await getDoc(groupRef);
           if (groupSnap.exists()) {
             const groupData = { id: groupSnap.id, ...groupSnap.data() } as Group;
@@ -87,7 +86,7 @@ export default function ContactDetailScreen({ navigation, route }: Props) {
       }
     };
 
-    if (userEmail) { 
+    if (userEmail) {
       fetchGroup();
     }
 
@@ -105,7 +104,7 @@ export default function ContactDetailScreen({ navigation, route }: Props) {
   };
 
   const handleDelete = () => {
-    if (!userEmail) { 
+    if (!userEmail) {
       Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
       navigation.replace('Login');
       return;
@@ -120,14 +119,17 @@ export default function ContactDetailScreen({ navigation, route }: Props) {
           text: 'Xóa',
           style: 'destructive',
           onPress: async () => {
+            setIsDeleting(true); // Bật trạng thái loading
             try {
-              await deleteDoc(doc(db, 'users', userEmail, 'contacts', contact.id)); 
+              await deleteDoc(doc(db, 'users', userEmail, 'contacts', contact.id));
               console.log('Đã xóa liên hệ:', contact.id);
               Alert.alert('Thành công', 'Liên hệ đã được xóa.');
               navigation.goBack();
             } catch (error: any) {
-              // console.error('Lỗi khi xóa liên hệ:', error);
-              // Alert.alert('Lỗi', 'Không thể xóa liên hệ. Vui lòng thử lại.');
+              console.error('Lỗi khi xóa liên hệ:', error);
+              Alert.alert('Lỗi', 'Không thể xóa liên hệ. Vui lòng thử lại.');
+            } finally {
+              setIsDeleting(false); // Tắt trạng thái loading
             }
           },
         },
@@ -255,9 +257,19 @@ export default function ContactDetailScreen({ navigation, route }: Props) {
             </View>
           )}
         </View>
-        <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={handleDelete}
+          disabled={isDeleting} // Vô hiệu hóa nút khi đang xóa
+        >
           <Text style={styles.deleteText}>Xóa liên hệ</Text>
         </TouchableOpacity>
+
+        {isDeleting && (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color={appColors.primary} />
+          </View>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -357,5 +369,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#FF3B30',
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

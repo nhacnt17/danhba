@@ -7,6 +7,7 @@ import { doc, setDoc, collection, getDocs } from 'firebase/firestore';
 import { Eye, EyeSlash } from 'iconsax-react-native';
 import { appColors } from '../constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CommonActions } from '@react-navigation/native'; // Thêm import này để sử dụng reset
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Register'>;
 
@@ -52,7 +53,14 @@ export default function RegisterScreen({ navigation }: Props) {
       console.log('Đã lưu tài khoản:', { name: name, email: normalizedEmail });
       await AsyncStorage.multiSet([['isLoggedIn', 'true'], ['userEmail', normalizedEmail], ['userName', name]]);
       setLoading(false);
-      navigation.replace('ContactList');
+
+      // Sử dụng reset để đặt lại stack và điều hướng đến MainDrawer với ContactList
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'MainDrawer', params: { screen: 'ContactList' } }],
+        })
+      );
     } catch (error: any) {
       setLoading(false);
       Alert.alert('Lỗi', 'Không thể đăng ký. Vui lòng thử lại.');
@@ -76,7 +84,7 @@ export default function RegisterScreen({ navigation }: Props) {
             />
             <TextInput
               style={styles.input}
-              placeholder="Email"
+              placeholder="Email (Gmail)"
               placeholderTextColor="#8a9ba5"
               value={email}
               onChangeText={setEmail}

@@ -5,7 +5,7 @@ import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
 import { ref, set } from 'firebase/database';
 import { addDoc, collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
-import { ArrowCircleLeft, Refresh } from 'iconsax-react-native';
+import { ArrowCircleLeft, Refresh, TextalignLeft } from 'iconsax-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -22,11 +22,17 @@ import { ScrollView } from 'react-native-gesture-handler';
 import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { captureRef } from 'react-native-view-shot';
-import { Contact, RootStackParamList } from '../../App';
+import { Contact, DrawerParamList, RootStackParamList } from '../../App';
 import { db, realtimeDb } from '../../firebase';
 import { appColors } from '../constants/Colors';
+import { CommonActions, NavigationProp } from '@react-navigation/native'; // Add this import for NavigationProp
+import { DrawerScreenProps } from '@react-navigation/drawer';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Backup'>;
+// Combine DrawerScreenProps with a NavigationProp for RootStackParamList
+type Props = DrawerScreenProps<DrawerParamList, 'Backup'> & {
+  navigation: NavigationProp<RootStackParamList>;
+};
+
 
 const BackupScreen = ({ navigation }: Props) => {
   const [shareCode, setShareCode] = useState('');
@@ -37,18 +43,18 @@ const BackupScreen = ({ navigation }: Props) => {
   const [includeEmail, setIncludeEmail] = useState(false);
   const [copied, setCopied] = useState(false);
   const [mediaPermission, requestMediaPermission] = MediaLibrary.usePermissions();
-  const [userEmail, setUserEmail] = useState<string | null>(null); 
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const qrViewRef = useRef<View>(null);
 
   useEffect(() => {
     const initialize = async () => {
       try {
-        const email = await AsyncStorage.getItem('userEmail'); 
+        const email = await AsyncStorage.getItem('userEmail');
         if (email) {
           setUserEmail(email);
           const loadLatestCode = async () => {
             try {
-              const codesRef = collection(db, 'users', email, 'backupCodes'); 
+              const codesRef = collection(db, 'users', email, 'backupCodes');
               const q = query(codesRef, orderBy('createdAt', 'desc'), limit(1));
               const snapshot = await getDocs(q);
               if (!snapshot.empty) {
@@ -72,12 +78,22 @@ const BackupScreen = ({ navigation }: Props) => {
           loadLatestCode();
         } else {
           Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
-          navigation.replace('Login');
+          navigation.dispatch(
+            CommonActions.reset({
+              index: 0,
+              routes: [{ name: 'Login' }],
+            })
+          );
         }
       } catch (error) {
         console.error('Error reading userEmail from AsyncStorage:', error);
         Alert.alert('Lỗi', 'Không thể tải thông tin người dùng.');
-        navigation.replace('Login');
+        navigation.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'Login' }],
+          })
+        );
       }
     };
     initialize();
@@ -94,16 +110,20 @@ const BackupScreen = ({ navigation }: Props) => {
 
   const performBackup = async () => {
     setShowModal(false);
-    if (!userEmail) { 
+    if (!userEmail) {
       Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
-      navigation.replace('Login');
-      return;
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        })
+      ); return;
     }
 
     setIsLoading(true);
 
     try {
-      const contactsRef = collection(db, 'users', userEmail, 'contacts'); 
+      const contactsRef = collection(db, 'users', userEmail, 'contacts');
       const snapshot = await getDocs(contactsRef);
       const contacts: Contact[] = snapshot.docs.map(doc => {
         const data = doc.data();
@@ -125,7 +145,7 @@ const BackupScreen = ({ navigation }: Props) => {
       const code = generateRandomCode();
       const createdAt = Date.now();
       const backupData = {
-        userId: userEmail, 
+        userId: userEmail,
         contacts,
         createdAt,
       };
@@ -133,7 +153,7 @@ const BackupScreen = ({ navigation }: Props) => {
       const backupRef = ref(realtimeDb, `sharedContacts/${code}`);
       await set(backupRef, backupData);
 
-      const codesRef = collection(db, 'users', userEmail, 'backupCodes'); 
+      const codesRef = collection(db, 'users', userEmail, 'backupCodes');
       await addDoc(codesRef, {
         code,
         createdAt,
@@ -231,8 +251,8 @@ const BackupScreen = ({ navigation }: Props) => {
       <SafeAreaView style={{ backgroundColor: appColors.primary }}>
         <View style={styles.Header}>
           <View style={{ width: 50 }}>
-            <TouchableOpacity onPress={() => navigation.goBack()}>
-              <ArrowCircleLeft size="34" color="#FF8A65" variant="Bulk" />
+            <TouchableOpacity onPress={() => navigation.openDrawer()}>
+              <TextalignLeft size="24" color="#FF8A65" variant="Bulk" />
             </TouchableOpacity>
           </View>
           <Text style={styles.tileHeader}>Sao lưu danh bạ</Text>

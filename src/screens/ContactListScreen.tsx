@@ -1,9 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
 import { onValue, ref, remove, set } from 'firebase/database';
 import { collection, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
-import { AddCircle, Call, Setting3, Trash } from 'iconsax-react-native';
+import { AddCircle, Call, TextalignLeft, Trash } from 'iconsax-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
@@ -22,7 +21,7 @@ import {
 } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Contact, Group, RootStackParamList } from '../../App';
+import { Contact, DrawerParamList, Group, RootStackParamList } from '../../App';
 import { db, realtimeDb } from '../../firebase';
 import { appColors } from '../constants/Colors';
 
@@ -35,7 +34,13 @@ const generateRandomUid = () => {
   });
 };
 
-type Props = NativeStackScreenProps<RootStackParamList, 'ContactList'>;
+import { DrawerScreenProps } from '@react-navigation/drawer';
+import { CommonActions, NavigationProp } from '@react-navigation/native'; // Add this import for NavigationProp
+
+// Combine DrawerScreenProps with a NavigationProp for RootStackParamList
+type Props = DrawerScreenProps<DrawerParamList, 'ContactList'> & {
+  navigation: NavigationProp<RootStackParamList>;
+};
 
 export default function ContactListScreen({ navigation }: Props) {
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -119,7 +124,6 @@ export default function ContactListScreen({ navigation }: Props) {
               setFilteredContacts(sortedContacts);
 
               contactList.forEach(contact => {
-                console.log(`Contact: ${contact.name}, groupId: ${contact.groupId || 'none'}`);
                 const avatarRef = ref(realtimeDb, `contactAvatars/${contact.id}`);
                 onValue(
                   avatarRef,
@@ -200,8 +204,12 @@ export default function ContactListScreen({ navigation }: Props) {
   const handlePickImage = async () => {
     if (!userEmail || !userUid) {
       Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
-      navigation.replace('Login');
-      return;
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        })
+      ); return;
     }
 
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -255,10 +263,6 @@ export default function ContactListScreen({ navigation }: Props) {
     }
   };
 
-  const handleSetting = () => {
-    navigation.navigate('Setting');
-  };
-
   const handleCall = async (contact: Contact) => {
     const phoneNumber = contact.phone.replace(/\D/g, '');
     const url = `tel:${phoneNumber}`;
@@ -279,8 +283,12 @@ export default function ContactListScreen({ navigation }: Props) {
   const handleDelete = async (contactId: string) => {
     if (!userEmail) {
       Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
-      navigation.replace('Login');
-      return;
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        })
+      ); return;
     }
 
     const contact = contacts.find(c => c.id === contactId);
@@ -336,7 +344,7 @@ export default function ContactListScreen({ navigation }: Props) {
     });
     return (
       <Animated.View
-        style={[styles.actionContainer, { height: itemHeight, transform: [{ translateX }] }]}
+        style={[styles.actionContainer, { height: itemHeight, transform: [{ translateX }], borderTopLeftRadius: 16, borderBottomLeftRadius: 16 }]}
       >
         <TouchableOpacity
           style={[styles.callAction, { height: 40, width: 40 }]}
@@ -356,7 +364,7 @@ export default function ContactListScreen({ navigation }: Props) {
     });
     return (
       <Animated.View
-        style={[styles.actionContainer, { height: itemHeight, transform: [{ translateX }] }]}
+        style={[styles.actionContainer, { height: itemHeight, transform: [{ translateX }], borderTopRightRadius: 16, borderBottomRightRadius: 16 }]}
       >
         <TouchableOpacity
           style={[styles.deleteAction, { height: 40, width: 40 }]}
@@ -431,16 +439,17 @@ export default function ContactListScreen({ navigation }: Props) {
         <View style={{ flex: 1, backgroundColor: appColors.secondary }}>
           <View style={{ width: '100%', height: 1, position: 'absolute', backgroundColor: appColors.primary, top: 0, left: 0, right: 0 }} />
           <View style={styles.header}>
-            <View style={styles.headerTop}>
-              <TouchableOpacity onPress={handleSetting}>
-                <Setting3 size={40} color={appColors.secondary} variant="Bulk" />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.headerCenter}>
-              <TouchableOpacity onPress={handlePickImage}>
-                <Image source={{ uri: avatarUrl }} style={styles.avatarAdmin} />
-              </TouchableOpacity>
-              <Text style={styles.emailText}>{userName || 'Chưa đăng nhập'}</Text>
+            <View style={styles.HeaderConten}>
+              <View style={{ width: 70 }}>
+                <TouchableOpacity onPress={() => navigation.openDrawer()}>
+                  <TextalignLeft size="24" color="#FF8A65" variant="Bulk" />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.tileHeader}>Danh bạ</Text>
+              <View style={{ width: 70 }}>
+                <TouchableOpacity >
+                </TouchableOpacity>
+              </View>
             </View>
             <View style={styles.headerBottom}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
@@ -483,8 +492,22 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 48,
     borderBottomLeftRadius: 48,
     backgroundColor: appColors.primary,
-    height: '35%',
+    height: 120,
     justifyContent: 'space-between',
+  },
+  HeaderConten: {
+    height: 60,
+    width: '100%',
+    backgroundColor: appColors.primary,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+  },
+  tileHeader: {
+    fontSize: 18,
+    color: appColors.secondary,
+    fontWeight: 'bold',
   },
   headerTop: {
     marginRight: 16,
@@ -536,6 +559,7 @@ const styles = StyleSheet.create({
   itemWrapper: {
     position: 'relative',
     marginBottom: 8,
+    marginHorizontal: 16,
   },
   backgroundLayer: {
     position: 'absolute',
