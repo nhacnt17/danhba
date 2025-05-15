@@ -1,9 +1,18 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, TextInput, TouchableOpacity, Text, Alert } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  TextInput,
+  TouchableOpacity,
+  Text,
+  Alert,
+  TouchableWithoutFeedback,
+  Keyboard,
+} from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import { db } from '../../firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { Eye, EyeSlash } from 'iconsax-react-native';
 import { appColors } from '../constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -11,21 +20,26 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
 export default function LoginScreen({ navigation }: Props) {
-  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
-    try {
-      const q = query(collection(db, 'users'), where('name', '==', name), where('password', '==', password));
-      const querySnapshot = await getDocs(q);
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      return Alert.alert('Lỗi', 'Email không hợp lệ');
+    if (!password.trim()) return Alert.alert('Lỗi', 'Mật khẩu không được để trống');
 
-      if (!querySnapshot.empty) {
+    try {
+      const normalizedEmail = email.trim().toLowerCase();
+      const userRef = doc(db, 'users', normalizedEmail);
+      const userSnap = await getDoc(userRef);
+
+      if (userSnap.exists() && userSnap.data().password === password) {
         await AsyncStorage.setItem('isLoggedIn', 'true');
-        await AsyncStorage.setItem('userName', name);
+        await AsyncStorage.setItem('userEmail', normalizedEmail);
         navigation.replace('ContactList');
       } else {
-        Alert.alert('Lỗi', 'Tên hoặc mật khẩu không chính xác');
+        Alert.alert('Lỗi', 'Email hoặc mật khẩu không chính xác');
       }
     } catch (error: any) {
       Alert.alert('Lỗi', 'Không thể đăng nhập. Vui lòng kiểm tra kết nối.');
@@ -34,55 +48,66 @@ export default function LoginScreen({ navigation }: Props) {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.card}>
-        <Text style={styles.title}>Đăng nhập</Text>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <View style={styles.container}>
+        <View style={styles.card}>
+          <Text style={styles.title}>Đăng nhập</Text>
 
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.input}
-            placeholder="Tên"
-            placeholderTextColor="#8a9ba5"
-            value={name}
-            onChangeText={setName}
-            autoCapitalize="none"
-          />
-          <View style={styles.passwordContainer}>
+          <View style={styles.inputContainer}>
             <TextInput
-              style={styles.passwordInput}
-              placeholder="Mật khẩu"
+              style={styles.input}
+              placeholder="Email"
               placeholderTextColor="#8a9ba5"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
             />
-            <TouchableOpacity
-              style={styles.eyeIcon}
-              onPress={() => setShowPassword(!showPassword)}
-            >
-              {showPassword ? (
-                <Eye size="26" color={appColors.primary} variant="Bulk" />
-              ) : (
-                <EyeSlash size="26" color={appColors.primary} variant="Bulk" />
-              )}
-            </TouchableOpacity>
+
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Mật khẩu"
+                placeholderTextColor="#8a9ba5"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity
+                style={styles.eyeIcon}
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? (
+                  <Eye size="26" color={appColors.primary} variant="Bulk" />
+                ) : (
+                  <EyeSlash size="26" color={appColors.primary} variant="Bulk" />
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
+
+          <TouchableOpacity
+            style={styles.forgotPasswordLink}
+            onPress={() => navigation.navigate('ForgotPassword')}
+          >
+            <Text style={styles.linkHighlight}>Quên mật khẩu?</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.button} onPress={handleLogin}>
+            <Text style={styles.buttonText}>Đăng nhập</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.registerLink}
+            onPress={() => navigation.navigate('Register')}
+          >
+            <Text style={styles.linkText}>
+              Chưa có tài khoản? <Text style={styles.linkHighlight}>Đăng ký ngay</Text>
+            </Text>
+          </TouchableOpacity>
         </View>
-
-        <TouchableOpacity style={styles.button} onPress={handleLogin}>
-          <Text style={styles.buttonText}>Đăng nhập</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.registerLink}
-          onPress={() => navigation.navigate('Register')}
-        >
-          <Text style={styles.linkText}>
-            Chưa có tài khoản? <Text style={styles.linkHighlight}>Đăng ký ngay</Text>
-          </Text>
-        </TouchableOpacity>
       </View>
-    </View>
+    </TouchableWithoutFeedback>
   );
 }
 
@@ -139,6 +164,10 @@ const styles = StyleSheet.create({
   },
   eyeIcon: {
     padding: 10,
+  },
+  forgotPasswordLink: {
+    marginTop: 12,
+    alignItems: 'flex-end',
   },
   button: {
     backgroundColor: '#1c4550',

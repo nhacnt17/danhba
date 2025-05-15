@@ -1,28 +1,28 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
 import { ref, set } from 'firebase/database';
-import { addDoc, collection, doc, setDoc, getDocs, deleteDoc } from 'firebase/firestore';
-import { ArrowCircleLeft, Add, Trash } from 'iconsax-react-native';
-import React, { useState, useEffect, useRef } from 'react';
+import { addDoc, collection, deleteDoc, doc, getDocs, setDoc } from 'firebase/firestore';
+import { Add, ArrowCircleLeft, Trash } from 'iconsax-react-native';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Image,
+  Keyboard,
   Modal,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  FlatList,
-  Keyboard,
 } from 'react-native';
 import ActionSheet, { ActionSheetRef } from 'react-native-actions-sheet';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Contact, Group, RootStackParamList } from '../../App';
 import { db, realtimeDb } from '../../firebase';
 import { appColors } from '../constants/Colors';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddEditContact'>;
 
@@ -40,13 +40,12 @@ export default function AddEditContactScreen({ navigation, route }: Props) {
   const [newGroupColor, setNewGroupColor] = useState('#FF0000');
   const [showAddGroupModal, setShowAddGroupModal] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
-  const [userName, setUserName] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null); 
   const actionSheetRef = useRef<ActionSheetRef>(null);
 
   const { contact } = route.params || {};
   const headerTitle = contact ? `Sửa liên hệ` : 'Thêm liên hệ';
 
-  // Danh sách 10 màu
   const colorList = [
     '#FF0000', // Đỏ
     '#00FF00', // Xanh lá
@@ -69,10 +68,10 @@ export default function AddEditContactScreen({ navigation, route }: Props) {
   useEffect(() => {
     const initialize = async () => {
       try {
-        const name = await AsyncStorage.getItem('userName');
-        if (name) {
-          setUserName(name);
-          const groupsRef = collection(db, 'users', name, 'groups');
+        const email = await AsyncStorage.getItem('userEmail'); 
+        if (email) {
+          setUserEmail(email);
+          const groupsRef = collection(db, 'users', email, 'groups'); 
           const snapshot = await getDocs(groupsRef);
           if (snapshot.empty) {
             // Tạo nhóm mặc định
@@ -133,7 +132,7 @@ export default function AddEditContactScreen({ navigation, route }: Props) {
       Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ tên và số điện thoại');
       return;
     }
-    if (!userName) {
+    if (!userEmail) { 
       Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
       navigation.replace('Login');
       return;
@@ -151,7 +150,7 @@ export default function AddEditContactScreen({ navigation, route }: Props) {
     };
 
     try {
-      const contactsRef = collection(db, 'users', userName, 'contacts');
+      const contactsRef = collection(db, 'users', userEmail, 'contacts'); 
       let contactId = contactData.id;
 
       if (contactData.id) {
@@ -196,21 +195,21 @@ export default function AddEditContactScreen({ navigation, route }: Props) {
       Alert.alert('Lỗi', 'Vui lòng nhập tên nhóm');
       return;
     }
-    if (!userName) {
+    if (!userEmail) { 
       Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
       navigation.replace('Login');
       return;
     }
 
     try {
-      const groupsRef = collection(db, 'users', userName, 'groups');
+      const groupsRef = collection(db, 'users', userEmail, 'groups'); 
       const docRef = await addDoc(groupsRef, {
         name: newGroupName,
         color: newGroupColor,
       });
       const newGroup = { id: docRef.id, name: newGroupName, color: newGroupColor };
       setGroups(prev => [...prev, newGroup]);
-      setGroupId(docRef.id); // Tự động gán nhóm mới cho liên hệ
+      setGroupId(docRef.id); 
       setNewGroupName('');
       setNewGroupColor(availableColors[0] || '#FF0000');
       setShowAddGroupModal(false);
@@ -222,14 +221,13 @@ export default function AddEditContactScreen({ navigation, route }: Props) {
   };
 
   const handleDeleteGroup = async (groupId: string) => {
-    if (!userName) {
+    if (!userEmail) { 
       Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
       navigation.replace('Login');
       return;
     }
 
-    Keyboard.dismiss(); // Ẩn bàn phím trước khi xóa nhóm
-
+    Keyboard.dismiss();
     Alert.alert(
       'Xác nhận',
       'Bạn có chắc muốn xóa nhóm này?',
@@ -240,7 +238,7 @@ export default function AddEditContactScreen({ navigation, route }: Props) {
           style: 'destructive',
           onPress: async () => {
             try {
-              const groupRef = doc(db, 'users', userName, 'groups', groupId);
+              const groupRef = doc(db, 'users', userEmail, 'groups', groupId); 
               await deleteDoc(groupRef);
               setGroups(prev => prev.filter(group => group.id !== groupId));
               if (groupId === groupId) {
@@ -259,7 +257,7 @@ export default function AddEditContactScreen({ navigation, route }: Props) {
 
   const showGroupActionSheet = () => {
     console.log('showGroupActionSheet called, groups:', groups);
-    Keyboard.dismiss(); // Ẩn bàn phím trước khi mở Action Sheet
+    Keyboard.dismiss();
     actionSheetRef.current?.show();
   };
 
@@ -470,7 +468,7 @@ export default function AddEditContactScreen({ navigation, route }: Props) {
               onPress={() => {
                 console.log('Opening add group modal');
                 actionSheetRef.current?.hide();
-                setTimeout(() => setShowAddGroupModal(true), 300); // Đợi Action Sheet đóng
+                setTimeout(() => setShowAddGroupModal(true), 300); 
               }}
             >
               <Add size={24} color="#007AFF" variant="Bold" />

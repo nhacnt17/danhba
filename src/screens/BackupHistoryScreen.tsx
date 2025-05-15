@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Clipboard from 'expo-clipboard';
 import * as FileSystem from 'expo-file-system';
@@ -18,12 +19,11 @@ import {
   View,
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { captureRef } from 'react-native-view-shot';
 import { Contact, RootStackParamList } from '../../App';
 import { db, realtimeDb } from '../../firebase';
 import { appColors } from '../constants/Colors';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BackupHistory'>;
 
@@ -39,7 +39,7 @@ const BackupHistoryScreen = ({ navigation }: Props) => {
   const [isLoading, setIsLoading] = useState(false);
   const [mediaPermission, requestMediaPermission] = MediaLibrary.usePermissions();
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
-  const [userName, setUserName] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null); 
   const qrRefs = useRef<{ [key: string]: View }>({});
   const animationValues = useRef<{ [key: string]: Animated.Value }>({}).current;
   const [copied, setCopied] = useState(false);
@@ -47,13 +47,13 @@ const BackupHistoryScreen = ({ navigation }: Props) => {
   useEffect(() => {
     const initialize = async () => {
       try {
-        const name = await AsyncStorage.getItem('userName');
-        if (name) {
-          setUserName(name);
+        const email = await AsyncStorage.getItem('userEmail'); 
+        if (email) {
+          setUserEmail(email);
           const loadBackupHistory = async () => {
             setIsLoading(true);
             try {
-              const codesRef = collection(db, 'users', name, 'backupCodes');
+              const codesRef = collection(db, 'users', email, 'backupCodes'); 
               const q = query(codesRef, orderBy('createdAt', 'desc'));
               const snapshot = await getDocs(q);
               const items: BackupItem[] = [];
@@ -99,7 +99,7 @@ const BackupHistoryScreen = ({ navigation }: Props) => {
           navigation.replace('Login');
         }
       } catch (error) {
-        console.error('Error reading userName from AsyncStorage:', error);
+        console.error('Error reading userEmail from AsyncStorage:', error);
         Alert.alert('Lỗi', 'Không thể tải thông tin người dùng.');
         navigation.replace('Login');
       }

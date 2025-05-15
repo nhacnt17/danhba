@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { onValue, ref } from 'firebase/database';
 import { deleteDoc, doc, getDoc } from 'firebase/firestore';
@@ -12,36 +13,35 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Contact, Group, RootStackParamList } from '../../App';
 import { db, realtimeDb } from '../../firebase';
 import { appColors } from '../constants/Colors';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ContactDetail'>;
 
 export default function ContactDetailScreen({ navigation, route }: Props) {
-  const { contact, group: initialGroup } = route.params; // Nhận group từ route.params
+  const { contact, group: initialGroup } = route.params;
   const [avatarUrl, setAvatarUrl] = useState<string>(
     'https://i.pinimg.com/736x/bc/43/98/bc439871417621836a0eeea768d60944.jpg'
   );
   const [group, setGroup] = useState<Group | null>(initialGroup || null);
   const [isLoadingGroup, setIsLoadingGroup] = useState<boolean>(!initialGroup && !!contact.groupId);
-  const [userName, setUserName] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null); 
 
   useEffect(() => {
-    // Lấy userName từ AsyncStorage
+    // Lấy userEmail từ AsyncStorage
     const initialize = async () => {
       try {
-        const name = await AsyncStorage.getItem('userName');
-        if (name) {
-          setUserName(name);
+        const email = await AsyncStorage.getItem('userEmail'); 
+        if (email) {
+          setUserEmail(email);
         } else {
           Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
           navigation.replace('Login');
         }
       } catch (error) {
-        console.error('Error reading userName from AsyncStorage:', error);
+        console.error('Error reading userEmail from AsyncStorage:', error);
         Alert.alert('Lỗi', 'Không thể tải thông tin người dùng.');
         navigation.replace('Login');
       }
@@ -67,10 +67,10 @@ export default function ContactDetailScreen({ navigation, route }: Props) {
 
     // Lấy thông tin nhóm từ Firestore nếu không có initialGroup
     const fetchGroup = async () => {
-      if (!initialGroup && contact.groupId && userName) {
+      if (!initialGroup && contact.groupId && userEmail) { 
         try {
           setIsLoadingGroup(true);
-          const groupRef = doc(db, 'users', userName, 'groups', contact.groupId);
+          const groupRef = doc(db, 'users', userEmail, 'groups', contact.groupId); 
           const groupSnap = await getDoc(groupRef);
           if (groupSnap.exists()) {
             const groupData = { id: groupSnap.id, ...groupSnap.data() } as Group;
@@ -87,12 +87,12 @@ export default function ContactDetailScreen({ navigation, route }: Props) {
       }
     };
 
-    if (userName) {
+    if (userEmail) { 
       fetchGroup();
     }
 
     return () => unsubscribe();
-  }, [contact.id, contact.avatarBase64, contact.groupId, initialGroup, userName]);
+  }, [contact.id, contact.avatarBase64, contact.groupId, initialGroup, userEmail]);
 
   const handleEdit = () => {
     navigation.navigate('AddEditContact', {
@@ -105,7 +105,7 @@ export default function ContactDetailScreen({ navigation, route }: Props) {
   };
 
   const handleDelete = () => {
-    if (!userName) {
+    if (!userEmail) { 
       Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
       navigation.replace('Login');
       return;
@@ -121,7 +121,7 @@ export default function ContactDetailScreen({ navigation, route }: Props) {
           style: 'destructive',
           onPress: async () => {
             try {
-              await deleteDoc(doc(db, 'users', userName, 'contacts', contact.id));
+              await deleteDoc(doc(db, 'users', userEmail, 'contacts', contact.id)); 
               console.log('Đã xóa liên hệ:', contact.id);
               Alert.alert('Thành công', 'Liên hệ đã được xóa.');
               navigation.goBack();

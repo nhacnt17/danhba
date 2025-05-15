@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Clipboard from 'expo-clipboard';
 import * as FileSystem from 'expo-file-system';
@@ -19,12 +20,11 @@ import {
 } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
 import QRCode from 'react-native-qrcode-svg';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { captureRef } from 'react-native-view-shot';
 import { Contact, RootStackParamList } from '../../App';
 import { db, realtimeDb } from '../../firebase';
 import { appColors } from '../constants/Colors';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Backup'>;
 
@@ -37,18 +37,18 @@ const BackupScreen = ({ navigation }: Props) => {
   const [includeEmail, setIncludeEmail] = useState(false);
   const [copied, setCopied] = useState(false);
   const [mediaPermission, requestMediaPermission] = MediaLibrary.usePermissions();
-  const [userName, setUserName] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null); 
   const qrViewRef = useRef<View>(null);
 
   useEffect(() => {
     const initialize = async () => {
       try {
-        const name = await AsyncStorage.getItem('userName');
-        if (name) {
-          setUserName(name);
+        const email = await AsyncStorage.getItem('userEmail'); 
+        if (email) {
+          setUserEmail(email);
           const loadLatestCode = async () => {
             try {
-              const codesRef = collection(db, 'users', name, 'backupCodes');
+              const codesRef = collection(db, 'users', email, 'backupCodes'); 
               const q = query(codesRef, orderBy('createdAt', 'desc'), limit(1));
               const snapshot = await getDocs(q);
               if (!snapshot.empty) {
@@ -75,7 +75,7 @@ const BackupScreen = ({ navigation }: Props) => {
           navigation.replace('Login');
         }
       } catch (error) {
-        console.error('Error reading userName from AsyncStorage:', error);
+        console.error('Error reading userEmail from AsyncStorage:', error);
         Alert.alert('Lỗi', 'Không thể tải thông tin người dùng.');
         navigation.replace('Login');
       }
@@ -94,7 +94,7 @@ const BackupScreen = ({ navigation }: Props) => {
 
   const performBackup = async () => {
     setShowModal(false);
-    if (!userName) {
+    if (!userEmail) { 
       Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
       navigation.replace('Login');
       return;
@@ -103,7 +103,7 @@ const BackupScreen = ({ navigation }: Props) => {
     setIsLoading(true);
 
     try {
-      const contactsRef = collection(db, 'users', userName, 'contacts');
+      const contactsRef = collection(db, 'users', userEmail, 'contacts'); 
       const snapshot = await getDocs(contactsRef);
       const contacts: Contact[] = snapshot.docs.map(doc => {
         const data = doc.data();
@@ -125,7 +125,7 @@ const BackupScreen = ({ navigation }: Props) => {
       const code = generateRandomCode();
       const createdAt = Date.now();
       const backupData = {
-        userId: userName,
+        userId: userEmail, 
         contacts,
         createdAt,
       };
@@ -133,7 +133,7 @@ const BackupScreen = ({ navigation }: Props) => {
       const backupRef = ref(realtimeDb, `sharedContacts/${code}`);
       await set(backupRef, backupData);
 
-      const codesRef = collection(db, 'users', userName, 'backupCodes');
+      const codesRef = collection(db, 'users', userEmail, 'backupCodes'); 
       await addDoc(codesRef, {
         code,
         createdAt,

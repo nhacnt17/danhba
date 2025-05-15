@@ -13,11 +13,13 @@ import SettingScreen from './src/screens/SettingScreen';
 import BackupScreen from './src/screens/BackupScreen';
 import ApplyCodeScreen from './src/screens/ApplyCodeScreen';
 import BackupHistoryScreen from './src/screens/BackupHistoryScreen';
+import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
 
 export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
   ContactList: undefined;
+  ForgotPassword: undefined;
   AddEditContact: { contact?: Contact; onSave: (contact: Contact) => void };
   ContactDetail: { contact: Contact; group?: Group };
   Setting: undefined;
@@ -78,6 +80,7 @@ export default function App() {
           <Stack.Screen name="Backup" component={BackupScreen} />
           <Stack.Screen name="BackupHistory" component={BackupHistoryScreen} />
           <Stack.Screen name="ApplyCode" component={ApplyCodeScreen} />
+          <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
         </Stack.Navigator>
         <StatusBar style="auto" />
       </NavigationContainer>

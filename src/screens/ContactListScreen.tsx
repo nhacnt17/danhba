@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
 import { onValue, ref, remove, set } from 'firebase/database';
@@ -9,20 +10,30 @@ import {
   Animated,
   FlatList,
   Image,
+  Keyboard,
   LayoutChangeEvent,
   Linking,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Contact, Group, RootStackParamList } from '../../App';
 import { db, realtimeDb } from '../../firebase';
 import { appColors } from '../constants/Colors';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Hàm tạo UID ngẫu nhiên
+const generateRandomUid = () => {
+  return 'xxxxxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ContactList'>;
 
@@ -34,19 +45,52 @@ export default function ContactListScreen({ navigation }: Props) {
   const [avatarUrl, setAvatarUrl] = useState<string>('https://i.pinimg.com/736x/bc/43/98/bc439871417621836a0eeea768d60944.jpg');
   const [contactAvatars, setContactAvatars] = useState<{ [key: string]: string }>({});
   const [itemHeight, setItemHeight] = useState<number>(70);
+  const [userEmail, setUserEmail] = useState<string>('');
   const [userName, setUserName] = useState<string>('');
+  const [userUid, setUserUid] = useState<string | null>(null);
   const currentSwipeableRef = useRef<Swipeable | null>(null);
 
   useEffect(() => {
     const initialize = async () => {
       try {
-        const name = await AsyncStorage.getItem('userName');
-        if (name) {
-          setUserName(name);
-          const uid = name;
+        const email = await AsyncStorage.getItem('userEmail');
+        if (email) {
+          setUserEmail(email);
+
+          // Tạo key cho userUid dựa trên email
+          const uidKey = `uid_${email}`;
+          let uid = await AsyncStorage.getItem(uidKey);
+          if (!uid) {
+            uid = generateRandomUid();
+            await AsyncStorage.setItem(uidKey, uid);
+          }
+          setUserUid(uid);
+
+          const uidPath = uid;
+
+          // Lấy userName từ Firestore
+          const userDocRef = doc(db, 'users', email);
+          const unsubscribeUser = onSnapshot(
+            userDocRef,
+            (snapshot) => {
+              if (snapshot.exists()) {
+                const userData = snapshot.data();
+                const name = userData?.name || '';
+                setUserName(name);
+                AsyncStorage.setItem('userName', name);
+              } else {
+                setUserName('');
+                AsyncStorage.setItem('userName', '');
+              }
+            },
+            (error) => {
+              console.error('Error loading user data:', error);
+              setUserName('');
+            }
+          );
 
           // Tải danh sách nhóm từ Firestore
-          const groupsRef = collection(db, 'users', uid, 'groups');
+          const groupsRef = collection(db, 'users', email, 'groups');
           const unsubscribeGroups = onSnapshot(
             groupsRef,
             (snapshot) => {
@@ -63,7 +107,7 @@ export default function ContactListScreen({ navigation }: Props) {
           );
 
           // Tải danh sách liên hệ từ Firestore
-          const contactsRef = collection(db, 'users', uid, 'contacts');
+          const contactsRef = collection(db, 'users', email, 'contacts');
           const unsubscribeContacts = onSnapshot(
             contactsRef,
             (snapshot) => {
@@ -88,10 +132,7 @@ export default function ContactListScreen({ navigation }: Props) {
                         [contact.id]: `data:image/jpeg;base64,${data.avatarBase64}`,
                       }));
                     }
-                  },
-                  // (error) => {
-                  //   console.error('Realtime Database onValue error:', error);
-                  // }
+                  }
                 );
               });
             },
@@ -102,7 +143,7 @@ export default function ContactListScreen({ navigation }: Props) {
           );
 
           // Tải ảnh đại diện người dùng
-          const avatarRef = ref(realtimeDb, `avatars/${uid}`);
+          const avatarRef = ref(realtimeDb, `avatars/${uidPath}`);
           const unsubscribeAvatar = onValue(
             avatarRef,
             (snapshot) => {
@@ -110,21 +151,18 @@ export default function ContactListScreen({ navigation }: Props) {
               if (data && data.avatarBase64) {
                 setAvatarUrl(`data:image/jpeg;base64,${data.avatarBase64}`);
               }
-            },
-            // (error) => {
-            //   console.error('Realtime Database avatar onValue error:', error);
-            //   Alert.alert('Lỗi', 'Không thể tải ảnh đại diện.');
-            // }
+            }
           );
 
           return () => {
+            unsubscribeUser();
             unsubscribeGroups();
             unsubscribeContacts();
             unsubscribeAvatar();
           };
         }
       } catch (error) {
-        console.error('Error initializing user:', error);
+        console.log('Initialization error:', error);
       }
     };
     initialize();
@@ -161,11 +199,22 @@ export default function ContactListScreen({ navigation }: Props) {
   };
 
   const handlePickImage = async () => {
-    if (!userName) return;
+    if (!userEmail || !userUid) {
+      Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
+      navigation.replace('Login');
+      return;
+    }
 
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
-      Alert.alert('Lỗi', 'Bạn cần cấp quyền truy cập thư viện ảnh!');
+      Alert.alert(
+        'Lỗi',
+        'Bạn cần cấp quyền truy cập thư viện ảnh để chọn ảnh đại diện!',
+        [
+          { text: 'Hủy', style: 'cancel' },
+          { text: 'Cấp quyền', onPress: () => ImagePicker.requestMediaLibraryPermissionsAsync() },
+        ]
+      );
       return;
     }
 
@@ -182,14 +231,27 @@ export default function ContactListScreen({ navigation }: Props) {
 
       if (base64) {
         try {
-          const uid = userName;
+          const uid = userUid;
           const avatarRef = ref(realtimeDb, `avatars/${uid}`);
-          await set(avatarRef, { avatarBase64: base64 });
+          await set(avatarRef, {
+            avatarBase64: base64,
+            email: userEmail,
+          });
           setAvatarUrl(`data:image/jpeg;base64,${base64}`);
-        } catch (error) {
+        } catch (error: any) {
           console.error('Lỗi khi lưu ảnh Base64 vào Realtime Database:', error);
-          Alert.alert('Lỗi', 'Không thể cập nhật ảnh đại diện. Kiểm tra quyền truy cập.');
+          let errorMessage = 'Không thể cập nhật ảnh đại diện. ';
+          if (error.code === 'PERMISSION_DENIED') {
+            errorMessage += 'Quyền truy cập Realtime Database bị từ chối. Vui lòng kiểm tra quy tắc bảo mật.';
+          } else if (error.code === 'NETWORK_ERROR') {
+            errorMessage += 'Kiểm tra kết nối mạng của bạn.';
+          } else {
+            errorMessage += 'Vui lòng thử lại sau.';
+          }
+          Alert.alert('Lỗi', errorMessage);
         }
+      } else {
+        Alert.alert('Lỗi', 'Không thể lấy dữ liệu ảnh. Vui lòng thử lại.');
       }
     }
   };
@@ -216,7 +278,11 @@ export default function ContactListScreen({ navigation }: Props) {
   };
 
   const handleDelete = async (contactId: string) => {
-    if (!userName) return;
+    if (!userEmail) {
+      Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
+      navigation.replace('Login');
+      return;
+    }
 
     const contact = contacts.find(c => c.id === contactId);
     if (!contact) {
@@ -234,7 +300,7 @@ export default function ContactListScreen({ navigation }: Props) {
           style: 'destructive',
           onPress: async () => {
             try {
-              const uid = userName;
+              const uid = userEmail;
               const contactRef = doc(db, 'users', uid, 'contacts', contactId);
               await deleteDoc(contactRef);
 
@@ -249,8 +315,8 @@ export default function ContactListScreen({ navigation }: Props) {
                 return updatedAvatars;
               });
             } catch (error) {
-              // console.error('Lỗi khi xóa liên hệ:', error);
-              // Alert.alert('Lỗi', 'Không thể xóa liên hệ. Vui lòng thử lại.');
+              console.error('Lỗi khi xóa liên hệ:', error);
+              Alert.alert('Lỗi', 'Không thể xóa liên hệ. Vui lòng thử lại.');
             }
           },
         },
@@ -361,53 +427,55 @@ export default function ContactListScreen({ navigation }: Props) {
   };
 
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: appColors.primary }}>
-      <View style={{ flex: 1, backgroundColor: appColors.secondary }}>
-        <View style={{ width: '100%', height: 1, position: 'absolute', backgroundColor: appColors.primary, top: 0, left: 0, right: 0 }} />
-        <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <TouchableOpacity onPress={handleSetting}>
-              <Setting3 size={40} color={appColors.secondary} variant="Bulk" />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.headerCenter}>
-            <TouchableOpacity onPress={handlePickImage}>
-              <Image source={{ uri: avatarUrl }} style={styles.avatarAdmin} />
-            </TouchableOpacity>
-            <Text style={styles.emailText}>{userName || 'Chưa đăng nhập'}</Text>
-          </View>
-          <View style={styles.headerBottom}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-              <TextInput
-                placeholder="Tìm kiếm liên hệ"
-                style={styles.searchContact}
-                value={searchQuery}
-                onChangeText={handleSearch}
-              />
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: appColors.primary }}>
+        <View style={{ flex: 1, backgroundColor: appColors.secondary }}>
+          <View style={{ width: '100%', height: 1, position: 'absolute', backgroundColor: appColors.primary, top: 0, left: 0, right: 0 }} />
+          <View style={styles.header}>
+            <View style={styles.headerTop}>
+              <TouchableOpacity onPress={handleSetting}>
+                <Setting3 size={40} color={appColors.secondary} variant="Bulk" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.headerCenter}>
+              <TouchableOpacity onPress={handlePickImage}>
+                <Image source={{ uri: avatarUrl }} style={styles.avatarAdmin} />
+              </TouchableOpacity>
+              <Text style={styles.emailText}>{userName || 'Chưa đăng nhập'}</Text>
+            </View>
+            <View style={styles.headerBottom}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                <TextInput
+                  placeholder="Tìm kiếm liên hệ"
+                  style={styles.searchContact}
+                  value={searchQuery}
+                  onChangeText={handleSearch}
+                />
+              </View>
             </View>
           </View>
+          <View style={styles.container}>
+            {filteredContacts.length === 0 ? (
+              <Text style={styles.emptyText}>
+                {searchQuery ? 'Không tìm thấy liên hệ' : 'Chưa có liên hệ nào'}
+              </Text>
+            ) : (
+              <FlatList
+                data={filteredContacts}
+                keyExtractor={item => item.id}
+                renderItem={renderItem}
+                initialNumToRender={10}
+                windowSize={5}
+                removeClippedSubviews={true}
+              />
+            )}
+            <TouchableOpacity style={styles.addButton} onPress={() => handleSaveContact()}>
+              <AddCircle size="50" color={appColors.primary} variant="Bulk" />
+            </TouchableOpacity>
+          </View>
         </View>
-        <View style={styles.container}>
-          {filteredContacts.length === 0 ? (
-            <Text style={styles.emptyText}>
-              {searchQuery ? 'Không tìm thấy liên hệ' : 'Chưa có liên hệ nào'}
-            </Text>
-          ) : (
-            <FlatList
-              data={filteredContacts}
-              keyExtractor={item => item.id}
-              renderItem={renderItem}
-              initialNumToRender={10}
-              windowSize={5}
-              removeClippedSubviews={true}
-            />
-          )}
-          <TouchableOpacity style={styles.addButton} onPress={() => handleSaveContact()}>
-            <AddCircle size="50" color={appColors.primary} variant="Bulk" />
-          </TouchableOpacity>
-        </View>
-      </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </TouchableWithoutFeedback>
   );
 }
 

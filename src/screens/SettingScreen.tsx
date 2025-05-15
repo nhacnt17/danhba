@@ -1,10 +1,11 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ArrowCircleLeft } from 'iconsax-react-native';
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { RootStackParamList } from '../../App';
 import { appColors } from '../constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Setting'>;
 
@@ -15,7 +16,7 @@ const SettingScreen = ({ navigation }: Props) => {
     setLoggingOut(true);
     try {
       await AsyncStorage.removeItem('isLoggedIn');
-      await AsyncStorage.removeItem('userName');
+      await AsyncStorage.removeItem('userEmail');
       navigation.replace('Login');
     } catch (error) {
       console.error('Lỗi khi đăng xuất:', error);

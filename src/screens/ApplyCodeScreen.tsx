@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { get, ref, set } from 'firebase/database';
@@ -7,18 +8,19 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   Platform,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Contact, RootStackParamList } from '../../App';
 import { db, realtimeDb } from '../../firebase';
 import { appColors } from '../constants/Colors';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ApplyCode'>;
 
@@ -28,21 +30,21 @@ const ApplyCodeScreen = ({ navigation }: Props) => {
   const [showScanner, setShowScanner] = useState(false);
   const [hasScanned, setHasScanned] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
-  const [userName, setUserName] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const isProcessingScan = useRef(false);
 
   useEffect(() => {
     const initialize = async () => {
       try {
-        const name = await AsyncStorage.getItem('userName');
-        if (name) {
-          setUserName(name);
+        const email = await AsyncStorage.getItem('userEmail');
+        if (email) {
+          setUserEmail(email);
         } else {
           Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
           navigation.replace('Login');
         }
       } catch (error) {
-        console.error('Error reading userName from AsyncStorage:', error);
+        console.error('Error reading userEmail from AsyncStorage:', error);
         Alert.alert('Lỗi', 'Không thể tải thông tin người dùng.');
         navigation.replace('Login');
       }
@@ -56,7 +58,7 @@ const ApplyCodeScreen = ({ navigation }: Props) => {
   }, [navigation, showScanner]);
 
   const handleApplyCode = async (code: string) => {
-    if (!userName) {
+    if (!userEmail) {
       Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
       setIsLoading(false);
       navigation.replace('Login');
@@ -88,7 +90,7 @@ const ApplyCodeScreen = ({ navigation }: Props) => {
       const includeAvatar = sharedContacts.some(contact => contact.avatarBase64);
       const includeEmail = sharedContacts.some(contact => contact.email);
 
-      const contactsRef = collection(db, 'users', userName, 'contacts');
+      const contactsRef = collection(db, 'users', userEmail, 'contacts');
       const currentSnapshot = await getDocs(contactsRef);
       const currentContacts: Contact[] = currentSnapshot.docs.map(doc => ({
         id: doc.id,
@@ -128,9 +130,8 @@ const ApplyCodeScreen = ({ navigation }: Props) => {
 
       let message = `Đã thêm ${addedCount} liên hệ`;
       if (addedCount > 0) {
-        message += ` (bao gồm tên, số${includeAvatar ? ', ảnh' : ''}${
-          includeAvatar && includeEmail ? ', ' : ''
-        }${includeEmail ? 'email' : ''}).`;
+        message += ` (bao gồm tên, số${includeAvatar ? ', ảnh' : ''}${includeAvatar && includeEmail ? ', ' : ''
+          }${includeEmail ? 'email' : ''}).`;
       } else {
         message += '.';
       }
@@ -194,69 +195,71 @@ const ApplyCodeScreen = ({ navigation }: Props) => {
   };
 
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: appColors.primary }}>
-      <View style={styles.Header}>
-        <View style={{ width: 50 }}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <ArrowCircleLeft size="34" color="#FF8A65" variant="Bulk" />
-          </TouchableOpacity>
-        </View>
-        <Text style={styles.tileHeader}>Áp dụng mã chia sẻ</Text>
-        <View style={{ width: 50 }} />
-      </View>
-
-      <View style={styles.container}>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Nhập hoặc quét mã</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Nhập mã chia sẻ"
-            value={inputCode}
-            onChangeText={setInputCode}
-            autoCapitalize="none"
-          />
-          <TouchableOpacity
-            style={styles.button}
-            onPress={() => handleApplyCode(inputCode)}
-            disabled={isLoading}
-          >
-            <Text style={styles.buttonText}>Áp dụng mã</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.button} onPress={handleScanQR} disabled={isLoading}>
-            <Text style={styles.buttonText}>Quét mã QR</Text>
-          </TouchableOpacity>
-        </View>
-
-        {showScanner && (
-          <View style={styles.scannerContainer}>
-            <CameraView
-              style={StyleSheet.absoluteFillObject}
-              onBarcodeScanned={handleBarCodeScanned}
-              barcodeScannerSettings={{
-                barcodeTypes: ['qr'],
-              }}
-              enableTorch={false}
-            />
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => {
-                setShowScanner(false);
-                setHasScanned(false);
-                isProcessingScan.current = false;
-              }}
-            >
-              <Text style={styles.closeButtonText}>Đóng</Text>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: appColors.primary }}>
+        <View style={styles.Header}>
+          <View style={{ width: 50 }}>
+            <TouchableOpacity onPress={() => navigation.goBack()}>
+              <ArrowCircleLeft size="34" color="#FF8A65" variant="Bulk" />
             </TouchableOpacity>
           </View>
-        )}
+          <Text style={styles.tileHeader}>Áp dụng mã chia sẻ</Text>
+          <View style={{ width: 50 }} />
+        </View>
 
-        {isLoading && (
-          <View style={styles.loadingOverlay}>
-            <ActivityIndicator size="large" color={appColors.primary} />
+        <View style={styles.container}>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Nhập hoặc quét mã</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Nhập mã chia sẻ"
+              value={inputCode}
+              onChangeText={setInputCode}
+              autoCapitalize="none"
+            />
+            <TouchableOpacity
+              style={styles.button}
+              onPress={() => handleApplyCode(inputCode)}
+              disabled={isLoading}
+            >
+              <Text style={styles.buttonText}>Áp dụng mã</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.button} onPress={handleScanQR} disabled={isLoading}>
+              <Text style={styles.buttonText}>Quét mã QR</Text>
+            </TouchableOpacity>
           </View>
-        )}
-      </View>
-    </SafeAreaView>
+
+          {showScanner && (
+            <View style={styles.scannerContainer}>
+              <CameraView
+                style={StyleSheet.absoluteFillObject}
+                onBarcodeScanned={handleBarCodeScanned}
+                barcodeScannerSettings={{
+                  barcodeTypes: ['qr'],
+                }}
+                enableTorch={false}
+              />
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => {
+                  setShowScanner(false);
+                  setHasScanned(false);
+                  isProcessingScan.current = false;
+                }}
+              >
+                <Text style={styles.closeButtonText}>Đóng</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {isLoading && (
+            <View style={styles.loadingOverlay}>
+              <ActivityIndicator size="large" color={appColors.primary} />
+            </View>
+          )}
+        </View>
+      </SafeAreaView>
+    </TouchableWithoutFeedback>
   );
 };
 
