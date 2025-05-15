@@ -84,7 +84,7 @@ export default function RegisterScreen({ navigation }: Props) {
             />
             <TextInput
               style={styles.input}
-              placeholder="Email (Gmail)"
+              placeholder="Email"
               placeholderTextColor="#8a9ba5"
               value={email}
               onChangeText={setEmail}

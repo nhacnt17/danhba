@@ -219,14 +219,14 @@ const CustomDrawerContent = (props: any) => {
           />
 
           {/* Nút đăng xuất */}
-          <DrawerItem
+        </ScrollView>
+         <DrawerItem
             label="Đăng xuất"
             icon={() => <User size={24} color={appColors.primary2} variant="Bulk" />}
             onPress={confirmLogout}
             labelStyle={styles.logoutText}
             style={styles.logoutButton}
           />
-        </ScrollView>
       </SafeAreaView>
     </View>
   );
@@ -338,10 +338,8 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   logoutButton: {
-    marginTop: 30,
-    marginHorizontal: 10,
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingVertical: 8,
+    borderRadius: 0,
     backgroundColor: appColors.primary2,
   },
   logoutText: {
