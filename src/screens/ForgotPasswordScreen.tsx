@@ -4,6 +4,13 @@ import React, { useState } from 'react';
 import { Alert, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { RootStackParamList } from '../../App';
 import { db } from '../../firebase';
+// Thêm dòng này
+import {
+  MAILERSEND_API_KEY,
+  VERIFIED_SENDER_EMAIL
+} from '@env';
+
+
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ForgotPassword'>;
 
@@ -16,9 +23,6 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
   const [isLoading, setIsLoading] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null); 
 
-  const MAILERSEND_API_KEY = 'mlsn.4a1f7999829f1cad98eb930535ed2390cc64c1b6df94d554f3ddce4d6a1930a7';
-  const VERIFIED_SENDER_EMAIL = 'noreply@test-eqvygm0n9rdl0p7w.mlsender.net';
-
   const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
 
   const checkEmailExists = async (email: string) => {
@@ -26,7 +30,7 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
     console.log('Checking email:', normalizedEmail);
 
     try {
-      const userRef = doc(db, 'users', normalizedEmail); // Truy vấn trực tiếp với email
+      const userRef = doc(db, 'users', normalizedEmail); 
       const userSnap = await getDoc(userRef);
       console.log('Found user:', userSnap.exists(), userSnap.data());
 
@@ -35,7 +39,7 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
         return null;
       }
 
-      return normalizedEmail; // Trả về email nếu tồn tại
+      return normalizedEmail; 
     } catch (error: any) {
       console.error('Error checking email:', error.message, error.code);
       Alert.alert('Lỗi', `Không thể kiểm tra email: ${error.message}. Kiểm tra console log.`);
@@ -45,7 +49,7 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
 
   const sendOTP = async (otp: string, email: string, userEmail: string) => {
     try {
-      const tokenRef = collection(db, 'users', userEmail, 'resetTokens'); // Sử dụng userEmail
+      const tokenRef = collection(db, 'users', userEmail, 'resetTokens'); 
       await setDoc(doc(tokenRef), {
         otp,
         createdAt: new Date().toISOString(),

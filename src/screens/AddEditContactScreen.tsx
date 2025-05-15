@@ -90,7 +90,6 @@ export default function AddEditContactScreen({ navigation, route }: Props) {
             ...doc.data(),
           } as Group));
           setGroups(groupList);
-          console.log('Groups loaded:', groupList);
         } else {
           Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
           navigation.replace('Login');

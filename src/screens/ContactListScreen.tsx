@@ -99,7 +99,6 @@ export default function ContactListScreen({ navigation }: Props) {
                 ...doc.data(),
               } as Group));
               setGroups(groupList);
-              console.log('Groups loaded:', groupList);
             },
             (error) => {
               console.error('Error loading groups:', error);
